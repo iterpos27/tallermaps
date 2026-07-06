@@ -27,9 +27,25 @@ app.use('/api/talleres', require('./routes/tallerRoutes'));
 app.use('/api/visitas', require('./routes/visitaRoutes'));
 app.use('/api/mapa', require('./routes/mapaRoutes'));
 
+// Serve frontend static build files
+const frontendBuildPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendBuildPath));
+
 // Root Endpoint for checking API health
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date() });
+});
+
+// Fallback all other routes to index.html for React SPA Router
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return next();
+  }
+  res.sendFile(path.join(frontendBuildPath, 'index.html'), (err) => {
+    if (err) {
+      next();
+    }
+  });
 });
 
 // Error handling middleware

@@ -4,7 +4,15 @@
 // If localhost is used in mobile, it fails, so we default to the browser's current IP.
 const getBaseUrl = () => {
   const host = window.location.hostname;
-  return `http://${host}:5005`;
+  const port = window.location.port;
+  
+  // If running in development (Vite is typically on port 3000)
+  if (port === '3000') {
+    return `http://${host}:5005`;
+  }
+  
+  // In production, we request from the same origin serving the app
+  return window.location.origin;
 };
 
 export const API_BASE_URL = getBaseUrl();
