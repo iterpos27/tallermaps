@@ -5,9 +5,33 @@ const db = require('../db');
  */
 const getTalleres = async (req, res) => {
   try {
-    const result = await db.query(
-      'SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, created_at FROM talleres ORDER BY nombre ASC'
-    );
+    const result = await db.query(`
+      WITH latest_visitas AS (
+        SELECT DISTINCT ON (v.taller_id)
+          v.taller_id,
+          v.fecha_visita,
+          v.vendedor_id
+        FROM visitas v
+        ORDER BY v.taller_id, v.fecha_visita DESC
+      )
+      SELECT
+        t.id,
+        t.nombre,
+        t.latitud,
+        t.longitud,
+        t.propietario,
+        t.telefono,
+        t.direccion,
+        t.correo,
+        t.observaciones,
+        t.created_at,
+        lv.fecha_visita AS ultima_fecha_visita,
+        u.name AS ultimo_vendedor_nombre
+      FROM talleres t
+      LEFT JOIN latest_visitas lv ON lv.taller_id = t.id
+      LEFT JOIN users u ON u.id = lv.vendedor_id
+      ORDER BY t.nombre ASC
+    `);
     return res.status(200).json(result.rows);
   } catch (error) {
     console.error('Error fetching talleres:', error);
@@ -166,6 +190,8 @@ const getTallerVisitas = async (req, res) => {
         v.latitud, 
         v.longitud, 
         v.fecha_visita,
+        v.observacion,
+        v.programacion_id,
         v.fuera_rango,
         v.distancia_metros,
         u.name as vendedor_nombre

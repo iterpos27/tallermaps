@@ -6,9 +6,32 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const railwayOrigin = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : null;
+const productionOrigins = railwayOrigin
+  ? Array.from(new Set([...allowedOrigins, railwayOrigin]))
+  : allowedOrigins;
 
-// Enable CORS so the React app can communicate with the backend
-app.use(cors());
+// Enable CORS so the React app can communicate with the backend.
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!isProduction || !origin || productionOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    if (productionOrigins.length === 0) {
+      return callback(null, false);
+    }
+
+    return callback(new Error('Origen no permitido por CORS.'));
+  }
+}));
 
 // Parse incoming JSON payloads
 app.use(express.json());
@@ -16,9 +39,9 @@ app.use(express.json());
 // Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded images statically
-// Accessible via http://localhost:5000/uploads/<filename>
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve uploaded images statically.
+const uploadsPath = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsPath));
 
 // Mount API routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -26,6 +49,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/talleres', require('./routes/tallerRoutes'));
 app.use('/api/visitas', require('./routes/visitaRoutes'));
 app.use('/api/mapa', require('./routes/mapaRoutes'));
+app.use('/api/programaciones', require('./routes/programacionRoutes'));
 
 // Serve frontend static build files
 const frontendBuildPath = path.join(__dirname, '../../frontend/dist');
@@ -33,6 +57,10 @@ app.use(express.static(frontendBuildPath));
 
 // Root Endpoint for checking API health
 app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date() });
+});
+
+app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date() });
 });
 
@@ -65,7 +93,7 @@ async function startServer() {
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
-      console.log(`Static file uploads folder served at http://localhost:${PORT}/uploads`);
+      console.log(`Static file uploads folder served from ${uploadsPath}`);
     });
   } catch (error) {
     console.error("Critical: Failed to start the server due to database error:", error);

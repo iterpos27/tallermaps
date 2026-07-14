@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, User, Car, Wrench } from 'lucide-react';
+import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, User, Car, Wrench, CalendarDays } from 'lucide-react';
 import { getUser, clearSession, offlineStorage } from '../api/api';
 
 export default function DashboardLayout({ children }) {
@@ -53,6 +53,7 @@ export default function DashboardLayout({ children }) {
   // Navigation config based on role
   const adminLinks = [
     { to: '/dashboard', label: 'Inicio', icon: Home },
+    { to: '/programacion', label: 'Programacion', icon: CalendarDays },
     { to: '/mapa', label: 'Mapa Talleres', icon: Map },
     { to: '/vendedores', label: 'Vendedores', icon: Users },
     { to: '/talleres', label: 'Talleres', icon: Wrench },
@@ -60,6 +61,7 @@ export default function DashboardLayout({ children }) {
 
   const vendedorLinks = [
     { to: '/dashboard', label: 'Inicio', icon: Home },
+    { to: '/programar-visitas', label: 'Programar', icon: CalendarDays },
     { to: '/registrar-visita', label: 'Registrar Visita', icon: PlusCircle },
     { to: '/mis-visitas', label: 'Mis Visitas', icon: ClipboardList },
   ];

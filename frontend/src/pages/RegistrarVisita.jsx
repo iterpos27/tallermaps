@@ -9,8 +9,11 @@ export default function RegistrarVisita() {
   // Form states
   const [tallerMode, setTallerMode] = useState('existente'); // 'existente' | 'nuevo'
   const [talleres, setTalleres] = useState([]);
+  const [programaciones, setProgramaciones] = useState([]);
+  const [selectedProgramacionId, setSelectedProgramacionId] = useState('');
   const [selectedTallerId, setSelectedTallerId] = useState('');
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
+  const [observacion, setObservacion] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   
   // Image states
@@ -38,6 +41,7 @@ export default function RegistrarVisita() {
   // Fetch workshops and fetch GPS coords on mount
   useEffect(() => {
     fetchTalleres();
+    fetchProgramaciones();
     getGPSLocation();
     
     // Cleanup camera stream on unmount
@@ -71,6 +75,37 @@ export default function RegistrarVisita() {
       setTalleres(data);
     } catch (err) {
       console.error('Error fetching workshops:', err);
+    }
+  };
+
+  const fetchProgramaciones = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const future = new Date();
+      future.setDate(future.getDate() + 14);
+      const data = await api.programaciones.list({
+        fecha_inicio: today,
+        fecha_fin: future.toISOString().split('T')[0],
+        estado: 'PENDIENTE'
+      });
+      setProgramaciones(data);
+    } catch (err) {
+      console.error('Error fetching schedules:', err);
+    }
+  };
+
+  const handleProgramacionChange = (value) => {
+    setSelectedProgramacionId(value);
+    if (!value) return;
+
+    const programacion = programaciones.find((item) => String(item.id) === String(value));
+    if (programacion) {
+      setTallerMode('existente');
+      setSelectedTallerId(String(programacion.taller_id));
+      setNuevoTallerNombre('');
+      if (!observacion && programacion.observacion) {
+        setObservacion(programacion.observacion);
+      }
     }
   };
 
@@ -241,6 +276,10 @@ export default function RegistrarVisita() {
       
       formData.append('latitud', coords.latitude);
       formData.append('longitud', coords.longitude);
+      formData.append('observacion', observacion.trim());
+      if (selectedProgramacionId) {
+        formData.append('programacion_id', selectedProgramacionId);
+      }
       formData.append('foto', photoFile);
 
       await api.visitas.create(formData);
@@ -264,6 +303,8 @@ export default function RegistrarVisita() {
               taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
               latitud: coords.latitude,
               longitud: coords.longitude,
+              observacion: observacion.trim(),
+              programacion_id: selectedProgramacionId || null,
               fotoBase64: base64data
             };
             
@@ -339,6 +380,25 @@ export default function RegistrarVisita() {
       </div>
 
       <form onSubmit={handleSubmit} className="glass-panel" style={{ padding: '24px' }}>
+        {programaciones.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Programacion pendiente</label>
+            <select
+              className="form-input form-select"
+              value={selectedProgramacionId}
+              onChange={(e) => handleProgramacionChange(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Registrar sin programacion especifica</option>
+              {programaciones.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {new Date(item.fecha_programada).toLocaleDateString('es-EC')} - {item.taller_nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         
         {/* Workshop selection tabs */}
         <div className="form-group">
@@ -366,7 +426,10 @@ export default function RegistrarVisita() {
             <select
               className="form-input form-select"
               value={selectedTallerId}
-              onChange={(e) => setSelectedTallerId(e.target.value)}
+              onChange={(e) => {
+                setSelectedTallerId(e.target.value);
+                setSelectedProgramacionId('');
+              }}
               disabled={loading}
             >
               <option value="">-- Seleccionar Taller --</option>
@@ -383,7 +446,10 @@ export default function RegistrarVisita() {
                 className="form-input"
                 placeholder="Ej. Taller Mecánico Autocar Ecuador"
                 value={nuevoTallerNombre}
-                onChange={(e) => setNuevoTallerNombre(e.target.value)}
+                onChange={(e) => {
+                  setNuevoTallerNombre(e.target.value);
+                  setSelectedProgramacionId('');
+                }}
                 disabled={loading}
               />
               {suggestions.length > 0 && (
@@ -429,6 +495,18 @@ export default function RegistrarVisita() {
               )}
             </div>
           )}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Observacion de la visita</label>
+          <textarea
+            className="form-input"
+            placeholder="Escriba novedades, acuerdos, pedidos o motivo de la visita"
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
+            disabled={loading}
+            style={{ minHeight: '90px', resize: 'vertical' }}
+          />
         </div>
 
         {/* Camera / Photo module */}

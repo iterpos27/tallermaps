@@ -501,6 +501,10 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.schedule-form-row {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.7fr) minmax(220px, 1.2fr) auto;
+}
+
 /* Camera and Photo Capturing (Registrar Visita) */
 .camera-module {
   max-width: 600px;
@@ -970,6 +974,10 @@ body {
     grid-template-columns: 1fr;
     gap: 12px;
     padding: 16px;
+  }
+
+  .schedule-form-row {
+    grid-template-columns: 1fr !important;
   }
 
   .camera-module {

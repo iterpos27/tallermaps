@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car, Lock, Mail, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { api, getToken, setSession } from '../api/api';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
@@ -29,7 +29,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
+    if (!identifier || !password) {
       setError('Por favor, complete todos los campos.');
       return;
     }
@@ -37,7 +37,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.auth.login(email, password);
+      const response = await api.auth.login(identifier, password);
       setSession(response.token, response.user);
       navigate('/dashboard');
     } catch (err) {
@@ -87,19 +87,20 @@ export default function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label" htmlFor="email">
-              Correo Electrónico
+            <label className="form-label" htmlFor="identifier">
+              Usuario o correo electronico
             </label>
             <div className="input-wrapper">
               <input
-                id="email"
-                type="email"
+                id="identifier"
+                type="text"
                 className="form-input"
-                placeholder="ejemplo@taller.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin, juan o ejemplo@taller.com"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 disabled={loading}
                 required
+                autoComplete="username"
               />
             </div>
           </div>

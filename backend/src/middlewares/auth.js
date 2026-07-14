@@ -3,6 +3,10 @@ require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tallervisitas_secret_key_2026_ecuador';
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET es obligatorio en production.');
+}
+
 /**
  * Middleware to authenticate requests using JWT
  */

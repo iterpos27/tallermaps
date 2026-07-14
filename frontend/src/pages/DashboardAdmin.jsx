@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Calendar, MapPin, ExternalLink, Users, ClipboardList, Shield, X, Map, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Search, Calendar, MapPin, ExternalLink, Users, ClipboardList, Shield, X, Map, AlertTriangle, CheckCircle, User } from 'lucide-react';
 import { api, API_BASE_URL } from '../api/api';
 
 export default function DashboardAdmin() {
@@ -94,16 +94,13 @@ export default function DashboardAdmin() {
   const handleExportCSV = () => {
     if (visitas.length === 0) return;
     
-    const headers = ['ID Visita', 'Taller', 'Vendedor', 'Fecha', 'Latitud', 'Longitud', 'URL Foto'];
+    const headers = ['NOMBRE TALLER', 'FECHA', 'QUIEN HIZO VISITA', 'OBSERVACION'];
     
     const rows = visitas.map(v => [
-      v.id,
       `"${v.taller_nombre.replace(/"/g, '""')}"`,
-      `"${v.vendedor_nombre.replace(/"/g, '""')}"`,
       `"${new Date(v.fecha_visita).toLocaleString('es-EC')}"`,
-      v.latitud,
-      v.longitud,
-      `"${API_BASE_URL}${v.foto_url}"`
+      `"${v.vendedor_nombre.replace(/"/g, '""')}"`,
+      `"${(v.observacion || '').replace(/"/g, '""')}"`
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -132,7 +129,7 @@ export default function DashboardAdmin() {
             disabled={visitas.length === 0}
           >
             <ClipboardList size={18} />
-            <span>Exportar CSV</span>
+            <span>Exportar Excel</span>
           </button>
           
           <button
@@ -485,6 +482,13 @@ export default function DashboardAdmin() {
                   </span>
                 </div>
 
+                {visita.observacion && (
+                  <div className="visit-detail-item" style={{ alignItems: 'flex-start' }}>
+                    <ClipboardList size={16} />
+                    <span style={{ fontSize: '0.82rem' }}>{visita.observacion}</span>
+                  </div>
+                )}
+
                 <div style={{ marginTop: 'auto', paddingTop: '16px', display: 'flex', gap: '10px' }}>
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${visita.latitud},${visita.longitud}`}
@@ -651,6 +655,17 @@ export default function DashboardAdmin() {
                     )}
                   </div>
                 </div>
+
+                {selectedVisita.observacion && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Observacion
+                    </div>
+                    <div style={{ fontWeight: '500', lineHeight: 1.5 }}>
+                      {selectedVisita.observacion}
+                    </div>
+                  </div>
+                )}
 
                 {/* Print Signatures (Only when printing) */}
                 <div 

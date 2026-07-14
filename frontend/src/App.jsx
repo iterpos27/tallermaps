@@ -10,10 +10,12 @@ import Login from './pages/Login';
 import DashboardAdmin from './pages/DashboardAdmin';
 import DashboardVendedor from './pages/DashboardVendedor';
 import RegistrarVisita from './pages/RegistrarVisita';
+import ProgramarVisitas from './pages/ProgramarVisitas';
 import MisVisitas from './pages/MisVisitas';
 import MapaTalleres from './pages/MapaTalleres';
 import GestionVendedores from './pages/GestionVendedores';
 import GestionTalleres from './pages/GestionTalleres';
+import ProgramacionAdmin from './pages/ProgramacionAdmin';
 
 /**
  * Route Guard for authenticated users
@@ -78,6 +80,16 @@ export default function App() {
           }
         />
         <Route
+          path="/programar-visitas"
+          element={
+            <ProtectedRoute allowedRoles={['VENDEDOR']}>
+              <DashboardLayout>
+                <ProgramarVisitas />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/mis-visitas"
           element={
             <ProtectedRoute allowedRoles={['VENDEDOR']}>
@@ -89,6 +101,16 @@ export default function App() {
         />
 
         {/* Admin-Only Routes */}
+        <Route
+          path="/programacion"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <DashboardLayout>
+                <ProgramacionAdmin />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/mapa"
           element={

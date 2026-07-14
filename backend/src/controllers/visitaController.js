@@ -17,8 +17,11 @@ const getVisitas = async (req, res) => {
         v.longitud,
         v.fecha_visita,
         v.created_at,
+        v.observacion,
+        v.programacion_id,
         v.fuera_rango,
         v.distancia_metros,
+        p.fecha_programada,
         t.id as taller_id,
         t.nombre as taller_nombre,
         u.id as vendedor_id,
@@ -27,6 +30,7 @@ const getVisitas = async (req, res) => {
       FROM visitas v
       JOIN talleres t ON v.taller_id = t.id
       JOIN users u ON v.vendedor_id = u.id
+      LEFT JOIN programaciones_visita p ON v.programacion_id = p.id
       WHERE 1=1
     `;
     const queryParams = [];
@@ -92,8 +96,11 @@ const getVisitaById = async (req, res) => {
         v.longitud,
         v.fecha_visita,
         v.created_at,
+        v.observacion,
+        v.programacion_id,
         v.fuera_rango,
         v.distancia_metros,
+        p.fecha_programada,
         t.id as taller_id,
         t.nombre as taller_nombre,
         u.id as vendedor_id,
@@ -102,6 +109,7 @@ const getVisitaById = async (req, res) => {
       FROM visitas v
       JOIN talleres t ON v.taller_id = t.id
       JOIN users u ON v.vendedor_id = u.id
+      LEFT JOIN programaciones_visita p ON v.programacion_id = p.id
       WHERE v.id = $1
     `, [id]);
 
@@ -146,7 +154,7 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
  */
 const createVisita = async (req, res) => {
   const vendedor_id = req.user.id;
-  const { taller_id, taller_nombre, latitud, longitud } = req.body;
+  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id } = req.body;
   const file = req.file;
 
   // Validation
@@ -162,6 +170,7 @@ const createVisita = async (req, res) => {
 
   try {
     let resolvedTallerId = null;
+    let resolvedProgramacionId = programacion_id || null;
 
     if (taller_id) {
       // Check if workshop exists
@@ -193,6 +202,52 @@ const createVisita = async (req, res) => {
       return res.status(400).json({ error: 'Debe proporcionar un ID de taller o un nombre de taller nuevo.' });
     }
 
+    if (resolvedProgramacionId) {
+      const programacionCheck = await db.query(
+        `SELECT id, taller_id, vendedor_id, estado
+         FROM programaciones_visita
+         WHERE id = $1`,
+        [resolvedProgramacionId]
+      );
+
+      if (programacionCheck.rows.length === 0) {
+        await storageService.deleteFile(`/uploads/${file.filename}`);
+        return res.status(400).json({ error: 'La programacion seleccionada no existe.' });
+      }
+
+      const programacion = programacionCheck.rows[0];
+      if (Number(programacion.vendedor_id) !== Number(vendedor_id)) {
+        await storageService.deleteFile(`/uploads/${file.filename}`);
+        return res.status(403).json({ error: 'La programacion seleccionada pertenece a otro vendedor.' });
+      }
+
+      if (Number(programacion.taller_id) !== Number(resolvedTallerId)) {
+        await storageService.deleteFile(`/uploads/${file.filename}`);
+        return res.status(400).json({ error: 'La programacion seleccionada no corresponde al taller elegido.' });
+      }
+
+      if (programacion.estado === 'CANCELADA') {
+        await storageService.deleteFile(`/uploads/${file.filename}`);
+        return res.status(400).json({ error: 'La programacion seleccionada esta cancelada.' });
+      }
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      const autoMatch = await db.query(
+        `SELECT id
+         FROM programaciones_visita
+         WHERE taller_id = $1
+           AND vendedor_id = $2
+           AND fecha_programada = $3
+           AND estado = 'PENDIENTE'
+         ORDER BY created_at ASC
+         LIMIT 1`,
+        [resolvedTallerId, vendedor_id, today]
+      );
+      if (autoMatch.rows.length > 0) {
+        resolvedProgramacionId = autoMatch.rows[0].id;
+      }
+    }
+
     // Save image to storage service
     const foto_url = await storageService.saveFile(file, req);
 
@@ -219,11 +274,30 @@ const createVisita = async (req, res) => {
 
     // Insert visit
     const result = await db.query(
-      `INSERT INTO visitas (taller_id, vendedor_id, foto_url, latitud, longitud, fuera_rango, distancia_metros) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id, taller_id, vendedor_id, foto_url, latitud, longitud, fecha_visita, fuera_rango, distancia_metros`,
-      [resolvedTallerId, vendedor_id, foto_url, latitud, longitud, fueraRango, distanciaMetros]
+      `INSERT INTO visitas (taller_id, vendedor_id, programacion_id, foto_url, latitud, longitud, observacion, fuera_rango, distancia_metros) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+       RETURNING id, taller_id, vendedor_id, programacion_id, foto_url, latitud, longitud, observacion, fecha_visita, fuera_rango, distancia_metros`,
+      [
+        resolvedTallerId,
+        vendedor_id,
+        resolvedProgramacionId,
+        foto_url,
+        latitud,
+        longitud,
+        observacion ? observacion.trim() : null,
+        fueraRango,
+        distanciaMetros
+      ]
     );
+
+    if (resolvedProgramacionId) {
+      await db.query(
+        `UPDATE programaciones_visita
+         SET estado = 'EJECUTADA', visita_id = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [result.rows[0].id, resolvedProgramacionId]
+      );
+    }
 
     return res.status(201).json({
       message: 'Visita registrada exitosamente.',

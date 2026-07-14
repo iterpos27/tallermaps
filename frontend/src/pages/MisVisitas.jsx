@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, Search, Calendar, MapPin, ExternalLink, X } from 'lucide-react';
+import { ClipboardList, Search, Calendar, MapPin, ExternalLink, X, FileText } from 'lucide-react';
 import { api, API_BASE_URL } from '../api/api';
 
 export default function MisVisitas() {
@@ -151,6 +151,13 @@ export default function MisVisitas() {
                     Lat: {parseFloat(visita.latitud).toFixed(6)}, Lng: {parseFloat(visita.longitud).toFixed(6)}
                   </span>
                 </div>
+
+                {visita.observacion && (
+                  <div className="visit-detail-item" style={{ alignItems: 'flex-start' }}>
+                    <FileText size={16} />
+                    <span style={{ fontSize: '0.82rem' }}>{visita.observacion}</span>
+                  </div>
+                )}
 
                 <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
                   <a

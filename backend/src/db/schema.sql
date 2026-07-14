@@ -1,10 +1,5 @@
 -- SQL Schema for TallerVisitas Pro
 
--- Drop tables if they exist
-DROP TABLE IF EXISTS visitas CASCADE;
-DROP TABLE IF EXISTS talleres CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-
 -- Users table
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
@@ -36,9 +31,25 @@ CREATE TABLE visitas (
   id SERIAL PRIMARY KEY,
   taller_id INTEGER REFERENCES talleres(id) ON DELETE CASCADE,
   vendedor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  programacion_id INTEGER,
   foto_url VARCHAR(255) NOT NULL,
   latitud DECIMAL(10, 8) NOT NULL,
   longitud DECIMAL(11, 8) NOT NULL,
+  observacion TEXT,
   fecha_visita TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Weekly visit scheduling table
+CREATE TABLE programaciones_visita (
+  id SERIAL PRIMARY KEY,
+  taller_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE CASCADE,
+  vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fecha_programada DATE NOT NULL,
+  observacion TEXT,
+  estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EJECUTADA', 'CANCELADA')),
+  visita_id INTEGER REFERENCES visitas(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (taller_id, vendedor_id, fecha_programada)
 );

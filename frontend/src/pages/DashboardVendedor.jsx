@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { PlusCircle, ClipboardList, MapPin, Calendar, ArrowRight, User } from 'lucide-react';
+import { PlusCircle, ClipboardList, MapPin, Calendar, ArrowRight, CalendarDays, FileText } from 'lucide-react';
 import { api, getUser, API_BASE_URL } from '../api/api';
 
 export default function DashboardVendedor() {
@@ -85,13 +85,13 @@ export default function DashboardVendedor() {
           {/* Quick Actions Panel */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '40px' }}>
             <div className="glass-panel" style={{ padding: '24px' }}>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: '12px', fontWeight: '600' }}>¿Estás en un taller mecánico?</h3>
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '12px', fontWeight: '600' }}>Planifica tu semana</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Registra tu visita actual. El sistema capturará automáticamente tu ubicación GPS de Ecuador y podrás tomar una foto de la fachada desde la cámara de tu celular.
+                Selecciona los talleres que vas a visitar y deja una observacion previa para cada recorrido.
               </p>
-              <button onClick={() => navigate('/registrar-visita')} className="btn btn-primary">
-                <PlusCircle size={18} />
-                <span>Registrar Visita Ahora</span>
+              <button onClick={() => navigate('/programar-visitas')} className="btn btn-primary">
+                <CalendarDays size={18} />
+                <span>Programar Visitas</span>
               </button>
             </div>
 
@@ -99,7 +99,7 @@ export default function DashboardVendedor() {
               <div>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '12px', fontWeight: '600' }}>Historial Completo</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                  Consulta la lista completa de todas las visitas que has realizado, junto con las fotos y las coordenadas GPS capturadas.
+                  Consulta las visitas que has realizado, junto con fotos, GPS y observaciones.
                 </p>
               </div>
               <button onClick={() => navigate('/mis-visitas')} className="btn btn-secondary">
@@ -159,6 +159,12 @@ export default function DashboardVendedor() {
                           Lat: {parseFloat(visita.latitud).toFixed(6)}, Lng: {parseFloat(visita.longitud).toFixed(6)}
                         </span>
                       </div>
+                      {visita.observacion && (
+                        <div className="visit-detail-item" style={{ alignItems: 'flex-start' }}>
+                          <FileText size={16} />
+                          <span style={{ fontSize: '0.8rem' }}>{visita.observacion}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -4,26 +4,44 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-// Configuration for default postgres db connection (to create the main db if missing)
-const dbConfig = {
-  host: process.env.PGHOST || 'localhost',
-  user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'admin',
-  port: parseInt(process.env.PGPORT || '5432'),
-};
+const isProduction = process.env.NODE_ENV === 'production';
+const connectionString = process.env.DATABASE_URL;
+
+const sslConfig = process.env.DB_SSL === 'true' || (isProduction && connectionString)
+  ? { rejectUnauthorized: false }
+  : false;
+
+// Managed Postgres providers such as Railway/Render provide DATABASE_URL.
+// Local development can keep using PG* vars.
+const dbConfig = connectionString
+  ? {
+      connectionString,
+      ssl: sslConfig
+    }
+  : {
+      host: process.env.PGHOST || 'localhost',
+      user: process.env.PGUSER || 'postgres',
+      password: process.env.PGPASSWORD || 'admin',
+      port: parseInt(process.env.PGPORT || '5432', 10),
+    };
 
 const mainDbName = process.env.PGDATABASE || 'tallervisitas_db';
 
 // Create pool connected to the target database
 const pool = new Pool({
   ...dbConfig,
-  database: mainDbName
+  ...(connectionString ? {} : { database: mainDbName })
 });
 
 /**
  * Initializes the database, tables and seeds initial users if they do not exist
  */
 async function initDatabase() {
+  if (connectionString) {
+    await initializeSchema(pool);
+    return;
+  }
+
   // Step 1: Ensure database exists
   const client = new Client({
     ...dbConfig,
@@ -60,8 +78,14 @@ async function initDatabase() {
     database: mainDbName
   });
 
+  await initializeSchema(dbClient, true);
+}
+
+async function initializeSchema(dbClient, shouldConnect = false) {
   try {
-    await dbClient.connect();
+    if (shouldConnect) {
+      await dbClient.connect();
+    }
 
     // Check if tables already exist (by checking if 'users' table exists)
     const tableCheckRes = await dbClient.query(`
@@ -151,11 +175,53 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS observaciones TEXT;
     `);
     console.log("Workshop detailed info columns verified.");
+
+    // Step 8: Ensure visit observations and weekly scheduling exist
+    console.log("Ensuring visit scheduling tables and columns exist...");
+    await dbClient.query(`
+      ALTER TABLE visitas
+      ADD COLUMN IF NOT EXISTS observacion TEXT,
+      ADD COLUMN IF NOT EXISTS programacion_id INTEGER;
+    `);
+
+    await dbClient.query(`
+      CREATE TABLE IF NOT EXISTS programaciones_visita (
+        id SERIAL PRIMARY KEY,
+        taller_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE CASCADE,
+        vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        fecha_programada DATE NOT NULL,
+        observacion TEXT,
+        estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EJECUTADA', 'CANCELADA')),
+        visita_id INTEGER REFERENCES visitas(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (taller_id, vendedor_id, fecha_programada)
+      );
+    `);
+
+    await dbClient.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM information_schema.table_constraints
+          WHERE constraint_name = 'visitas_programacion_id_fkey'
+            AND table_name = 'visitas'
+        ) THEN
+          ALTER TABLE visitas
+          ADD CONSTRAINT visitas_programacion_id_fkey
+          FOREIGN KEY (programacion_id) REFERENCES programaciones_visita(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+    console.log("Visit scheduling verified.");
   } catch (error) {
     console.error("Error setting up database tables:", error);
     throw error;
   } finally {
-    await dbClient.end();
+    if (shouldConnect) {
+      await dbClient.end();
+    }
   }
 }
 

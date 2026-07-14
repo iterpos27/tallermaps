@@ -3,12 +3,16 @@
 // Detect server hostname to allow mobile devices on the same network to connect.
 // If localhost is used in mobile, it fails, so we default to the browser's current IP.
 const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
   const host = window.location.hostname;
   const port = window.location.port;
   
   // If running in development (Vite is typically on port 3000)
   if (port === '3000') {
-    return `http://${host}:5005`;
+    return `http://${host}:5000`;
   }
   
   // In production, we request from the same origin serving the app
@@ -95,10 +99,10 @@ const makeRequest = async (endpoint, options = {}) => {
  */
 export const api = {
   auth: {
-    login: (email, password) => 
+    login: (identifier, password) => 
       makeRequest('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ identifier, password })
       })
   },
   
@@ -160,6 +164,43 @@ export const api = {
         method: 'POST',
         body: formData
       });
+    }
+  },
+
+  programaciones: {
+    list: (filters = {}) => {
+      const params = new URLSearchParams();
+      if (filters.vendedor_id) params.append('vendedor_id', filters.vendedor_id);
+      if (filters.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio);
+      if (filters.fecha_fin) params.append('fecha_fin', filters.fecha_fin);
+      if (filters.estado) params.append('estado', filters.estado);
+
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return makeRequest(`/programaciones${query}`, { method: 'GET' });
+    },
+    create: (data) =>
+      makeRequest('/programaciones', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    createBatch: (items) =>
+      makeRequest('/programaciones/batch', {
+        method: 'POST',
+        body: JSON.stringify({ items })
+      }),
+    update: (id, data) =>
+      makeRequest(`/programaciones/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
+    reporte: (filters = {}) => {
+      const params = new URLSearchParams();
+      if (filters.vendedor_id) params.append('vendedor_id', filters.vendedor_id);
+      if (filters.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio);
+      if (filters.fecha_fin) params.append('fecha_fin', filters.fecha_fin);
+
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return makeRequest(`/programaciones/reporte${query}`, { method: 'GET' });
     }
   },
   
@@ -228,6 +269,12 @@ export const offlineStorage = {
         }
         formData.append('latitud', visit.latitud);
         formData.append('longitud', visit.longitud);
+        if (visit.observacion) {
+          formData.append('observacion', visit.observacion);
+        }
+        if (visit.programacion_id) {
+          formData.append('programacion_id', visit.programacion_id);
+        }
         formData.append('foto', file);
 
         // Upload to backend
@@ -246,4 +293,3 @@ export const offlineStorage = {
     return syncedCount;
   }
 };
-

@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 
-// Configure local storage path
-const uploadDir = path.join(__dirname, '../../uploads');
+// Configure local storage path. In Render, set UPLOAD_DIR to the persistent disk mount path.
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 
 // Ensure the upload directory exists
 if (!fs.existsSync(uploadDir)) {
@@ -37,7 +37,7 @@ const upload = multer({
   storage: diskStorage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: parseInt(process.env.MAX_UPLOAD_MB || '10', 10) * 1024 * 1024
   }
 });
 

@@ -163,6 +163,7 @@ export default function GestionTalleres() {
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '16px' }}>Nombre del Taller</th>
+                <th style={{ padding: '16px' }}>Ultimo Vendedor</th>
                 <th style={{ padding: '16px' }}>Coordenadas GPS</th>
                 <th style={{ padding: '16px' }}>Fecha Creación</th>
                 <th style={{ padding: '16px', textAlign: 'right' }}>Acciones</th>
@@ -190,6 +191,17 @@ export default function GestionTalleres() {
                           </div>
                         )}
                       </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    {taller.ultimo_vendedor_nombre ? (
+                      <>
+                        <strong style={{ color: 'var(--text-main)' }}>{taller.ultimo_vendedor_nombre}</strong>
+                        <br />
+                        {new Date(taller.ultima_fecha_visita).toLocaleDateString('es-EC')}
+                      </>
+                    ) : (
+                      <span>Sin visitas</span>
                     )}
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
@@ -441,6 +453,12 @@ export default function GestionTalleres() {
                           <MapPin size={12} />
                           <span>Lat: {parseFloat(v.latitud).toFixed(6)}, Lng: {parseFloat(v.longitud).toFixed(6)}</span>
                         </div>
+
+                        {v.observacion && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginBottom: '6px' }}>
+                            Observacion: {v.observacion}
+                          </div>
+                        )}
 
                         {/* Geofencing Badge */}
                         {v.fuera_rango ? (

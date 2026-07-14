@@ -5,20 +5,25 @@ require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tallervisitas_secret_key_2026_ecuador';
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET es obligatorio en production.');
+}
+
 /**
  * Controller for handling login requests
  */
 const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, username, usuario, identifier: rawIdentifier, password } = req.body;
+  const loginIdentifier = rawIdentifier || usuario || username || email;
 
-  if (!email || !password) {
+  if (!loginIdentifier || !password) {
     return res.status(400).json({ 
       error: 'Por favor, proporcione su usuario/correo y contraseña.' 
     });
   }
 
   try {
-    const identifier = email.trim().toLowerCase();
+    const identifier = loginIdentifier.trim().toLowerCase();
     // Look up user by email OR username
     const result = await db.query(
       'SELECT * FROM users WHERE LOWER(email) = $1 OR LOWER(username) = $1', 
