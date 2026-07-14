@@ -7,7 +7,7 @@
     "node": ">=20 <23"
   },
   "scripts": {
-    "install-frontend": "npm ci --prefix frontend",
+    "install-frontend": "npm install --prefix frontend",
     "install-backend": "npm ci --prefix backend",
     "build-frontend": "npm run build --prefix frontend",
     "build": "npm run install-frontend && npm run build-frontend && npm run install-backend",
