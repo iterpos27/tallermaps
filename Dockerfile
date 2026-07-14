@@ -16,6 +16,7 @@ FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV FRONTEND_DIST_DIR=/app/frontend/dist
 
 COPY package.json ./
 COPY backend ./backend

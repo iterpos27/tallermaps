@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { initDatabase } = require('./db');
 require('dotenv').config();
 
@@ -52,8 +53,17 @@ app.use('/api/mapa', require('./routes/mapaRoutes'));
 app.use('/api/programaciones', require('./routes/programacionRoutes'));
 
 // Serve frontend static build files
-const frontendBuildPath = path.join(__dirname, '../../frontend/dist');
-app.use(express.static(frontendBuildPath));
+const frontendBuildPath = process.env.FRONTEND_DIST_DIR || path.resolve(__dirname, '../../frontend/dist');
+const frontendIndexPath = path.join(frontendBuildPath, 'index.html');
+
+app.use(express.static(frontendBuildPath, {
+  fallthrough: true,
+  index: false
+}));
+
+app.get('/assets/*', (req, res) => {
+  res.status(404).json({ error: 'Asset no encontrado en el build del frontend.' });
+});
 
 // Root Endpoint for checking API health
 app.get('/api/health', (req, res) => {
@@ -69,7 +79,14 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
     return next();
   }
-  res.sendFile(path.join(frontendBuildPath, 'index.html'), (err) => {
+
+  if (!fs.existsSync(frontendIndexPath)) {
+    return res.status(503).json({
+      error: 'El build del frontend no esta disponible. Verifique que npm run build haya generado frontend/dist.'
+    });
+  }
+
+  res.sendFile(frontendIndexPath, (err) => {
     if (err) {
       next();
     }
@@ -94,6 +111,7 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`Static file uploads folder served from ${uploadsPath}`);
+      console.log(`Frontend build served from ${frontendBuildPath}`);
     });
   } catch (error) {
     console.error("Critical: Failed to start the server due to database error:", error);
