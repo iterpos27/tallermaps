@@ -1,4 +1,5 @@
 const db = require('../db');
+const { storageService } = require('../services/storage');
 
 /**
  * List all workshops (talleres)
@@ -171,6 +172,60 @@ const updateTaller = async (req, res) => {
 };
 
 /**
+ * Permanently delete a workshop and its related records.
+ * The database cascades visits and schedules; stored visit photos are cleaned up separately.
+ */
+const deleteTaller = async (req, res) => {
+  const { id } = req.params;
+
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: 'Identificador de taller inválido.' });
+  }
+
+  let client;
+
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const tallerResult = await client.query(
+      'SELECT id, nombre FROM talleres WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+
+    if (tallerResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Taller no encontrado.' });
+    }
+
+    const photosResult = await client.query(
+      'SELECT foto_url FROM visitas WHERE taller_id = $1 AND foto_url IS NOT NULL',
+      [id]
+    );
+
+    await client.query('DELETE FROM talleres WHERE id = $1', [id]);
+    await client.query('COMMIT');
+
+    await Promise.all(
+      photosResult.rows.map(({ foto_url }) => storageService.deleteFile(foto_url))
+    );
+
+    return res.status(200).json({
+      message: 'Taller eliminado permanentemente.',
+      taller: tallerResult.rows[0]
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Error deleting taller:', error);
+    return res.status(500).json({
+      error: 'Error al eliminar el taller.'
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+/**
  * Get visit history for a specific workshop
  */
 const getTallerVisitas = async (req, res) => {
@@ -216,5 +271,6 @@ module.exports = {
   getTallerById,
   createTaller,
   updateTaller,
+  deleteTaller,
   getTallerVisitas
 };

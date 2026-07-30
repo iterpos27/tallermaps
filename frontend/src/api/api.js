@@ -141,6 +141,8 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(tallerData)
       }),
+    delete: (id) =>
+      makeRequest(`/talleres/${id}`, { method: 'DELETE' }),
     visitas: (id) => 
       makeRequest(`/talleres/${id}/visitas`, { method: 'GET' })
   },

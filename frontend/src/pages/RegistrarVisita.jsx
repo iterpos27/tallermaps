@@ -19,8 +19,6 @@ export default function RegistrarVisita() {
   // Image states
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError] = useState(false);
   
   // GPS states
   const [coords, setCoords] = useState(null);
@@ -32,10 +30,7 @@ export default function RegistrarVisita() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Refs for inline camera
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
+  // Ref for the native mobile camera input
   const fileInputRef = useRef(null);
 
   // Fetch workshops and fetch GPS coords on mount
@@ -43,11 +38,6 @@ export default function RegistrarVisita() {
     fetchTalleres();
     fetchProgramaciones();
     getGPSLocation();
-    
-    // Cleanup camera stream on unmount
-    return () => {
-      stopCamera();
-    };
   }, []);
 
   // Autocomplete suggestions for workshops
@@ -151,91 +141,22 @@ export default function RegistrarVisita() {
     );
   };
 
-  // Inline Camera Operations
-  const startCamera = async () => {
-    setCameraError(false);
-    setCameraActive(true);
-    
-    try {
-      // Try to open back/environment camera first
-      const constraints = {
-        video: { facingMode: 'environment' },
-        audio: false
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error('Error accessing back camera, trying default camera:', err);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err2) {
-        console.error('Failed to open any camera:', err2);
-        setCameraError(true);
-        setCameraActive(false);
-        // Trigger uploader automatically if camera fails
-        if (fileInputRef.current) {
-          fileInputRef.current.click();
-        }
-      }
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setCameraActive(false);
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-
-      // Set canvas size to match video resolution
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Draw the current video frame on canvas
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Convert canvas to blob and set file
-      canvas.toBlob((blob) => {
-        const file = new File([blob], `visita-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        setPhotoFile(file);
-        
-        const previewUrl = URL.createObjectURL(blob);
-        setPhotoPreview(previewUrl);
-        
-        stopCamera();
-      }, 'image/jpeg', 0.85);
-    }
-  };
-
-  // Uploader operations
+  // Native mobile camera operations
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
       setPhotoFile(file);
       const previewUrl = URL.createObjectURL(file);
       setPhotoPreview(previewUrl);
-      stopCamera();
     }
   };
 
   const clearPhoto = () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoFile(null);
     setPhotoPreview('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e) => {
@@ -514,28 +435,8 @@ export default function RegistrarVisita() {
           <label className="form-label">Foto de Fachada/Lugar</label>
           
           <div className="camera-preview-container">
-            {/* 1. Camera active stream */}
-            {cameraActive && (
-              <>
-                <video ref={videoRef} autoPlay playsInline className="camera-video" />
-                <div className="camera-controls">
-                  <button type="button" onClick={capturePhoto} className="btn-capture" title="Capturar Foto">
-                    <Camera size={24} />
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={stopCamera} 
-                    className="btn btn-danger" 
-                    style={{ width: '40px', height: '40px', borderRadius: '50%', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* 2. Photo preview captured */}
-            {!cameraActive && photoPreview && (
+            {/* Photo preview captured */}
+            {photoPreview && (
               <div style={{ position: 'relative', width: '100%', height: '100%' }}>
                 <img src={photoPreview} alt="Vista previa de visita" className="photo-preview" />
                 <button
@@ -550,23 +451,21 @@ export default function RegistrarVisita() {
               </div>
             )}
 
-            {/* 3. Empty placeholder */}
-            {!cameraActive && !photoPreview && (
-              <div className="camera-placeholder" onClick={startCamera}>
+            {/* Empty placeholder */}
+            {!photoPreview && (
+              <div className="camera-placeholder" onClick={() => fileInputRef.current?.click()}>
                 <Camera size={44} className="camera-placeholder-icon" />
                 <div>
-                  <p style={{ fontWeight: '600' }}>Iniciar Cámara del Sistema</p>
+                  <p style={{ fontWeight: '600' }}>Tomar foto</p>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Solo se permite capturar fotos tomadas en vivo
+                    Se abrirá la cámara del celular
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          <canvas ref={canvasRef} className="camera-canvas" />
-
-          {/* Hidden input file for fallback and direct native uploader trigger */}
+          {/* Hidden input that opens the native mobile camera */}
           <input
             type="file"
             ref={fileInputRef}
@@ -576,31 +475,18 @@ export default function RegistrarVisita() {
             style={{ display: 'none' }}
           />
 
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {!cameraActive && !photoPreview && (
-              <>
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                  disabled={loading}
-                >
-                  <Camera size={18} />
-                  <span>Usar Cámara Web/Interna</span>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current.click()}
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  disabled={loading}
-                >
-                  <Camera size={18} />
-                  <span>Abrir Cámara del Celular</span>
-                </button>
-              </>
+          <div>
+            {!photoPreview && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={loading}
+              >
+                <Camera size={18} />
+                <span>Tomar foto</span>
+              </button>
             )}
           </div>
         </div>

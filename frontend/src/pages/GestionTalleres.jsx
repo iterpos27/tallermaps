@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_BASE_URL } from '../api/api';
-import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Eye } from 'lucide-react';
+import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2 } from 'lucide-react';
 
 export default function GestionTalleres() {
   const [talleres, setTalleres] = useState([]);
@@ -25,6 +25,10 @@ export default function GestionTalleres() {
   const [historyTaller, setHistoryTaller] = useState(null);
   const [historyVisits, setHistoryVisits] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Delete Modal States
+  const [deletingTaller, setDeletingTaller] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchTalleres = async () => {
     try {
@@ -101,6 +105,25 @@ export default function GestionTalleres() {
       console.error('Error fetching workshop visits history:', err);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingTaller) return;
+
+    setDeleteLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await api.talleres.delete(deletingTaller.id);
+      setTalleres((current) => current.filter((taller) => taller.id !== deletingTaller.id));
+      setSuccess(`El taller "${deletingTaller.nombre}" fue eliminado del sistema y del mapa.`);
+      setDeletingTaller(null);
+    } catch (err) {
+      setError(err.message || 'Error al eliminar el taller.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -230,6 +253,19 @@ export default function GestionTalleres() {
                       >
                         <Edit size={14} />
                         <span>Editar</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeletingTaller(taller);
+                          setError('');
+                          setSuccess('');
+                        }}
+                        className="btn btn-danger"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }}
+                        title="Eliminar Taller"
+                      >
+                        <Trash2 size={14} />
+                        <span>Eliminar</span>
                       </button>
                     </div>
                   </td>
@@ -383,6 +419,55 @@ export default function GestionTalleres() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Workshop Modal */}
+      {deletingTaller && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-panel" role="dialog" aria-modal="true" aria-labelledby="delete-taller-title" style={{ width: '100%', maxWidth: '460px', background: '#ffffff', padding: '24px', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '18px' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', background: '#fef2f2' }}>
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 id="delete-taller-title" style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)', marginBottom: '6px' }}>
+                  ¿Eliminar este taller?
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                  Se eliminará permanentemente <strong style={{ color: 'var(--text-main)' }}>{deletingTaller.nombre}</strong>, junto con sus visitas, fotografías y programaciones. También desaparecerá del mapa.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="alert alert-danger" style={{ marginBottom: '16px' }}>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setDeletingTaller(null)}
+                className="btn btn-secondary"
+                style={{ width: 'auto', padding: '10px 16px' }}
+                disabled={deleteLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="btn btn-danger"
+                style={{ width: 'auto', padding: '10px 16px' }}
+                disabled={deleteLoading}
+              >
+                <Trash2 size={16} />
+                <span>{deleteLoading ? 'Eliminando...' : 'Sí, eliminar'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
