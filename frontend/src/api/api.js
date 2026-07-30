@@ -171,6 +171,8 @@ export const api = {
     },
     get: (id) => 
       makeRequest(`/visitas/${id}`, { method: 'GET' }),
+    delete: (id) =>
+      makeRequest(`/visitas/${id}`, { method: 'DELETE' }),
     create: (formData) => {
       // expects FormData containing: taller_id or taller_nombre, latitud, longitud, and foto
       return makeRequest('/visitas', {

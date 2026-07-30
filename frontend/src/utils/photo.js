@@ -17,8 +17,23 @@ export const PHOTO_PLACEHOLDER = `data:image/svg+xml;charset=UTF-8,${encodeURICo
 
 export const getPhotoUrl = (photoUrl) => {
   if (!photoUrl) return PHOTO_PLACEHOLDER;
-  if (/^(?:https?:|data:|blob:)/i.test(photoUrl)) return photoUrl;
-  return `${API_BASE_URL}${photoUrl.startsWith('/') ? photoUrl : `/${photoUrl}`}`;
+  if (/^(?:data:|blob:)/i.test(photoUrl)) return photoUrl;
+
+  // Older rows may point to a previous deployment domain. Uploads belong to
+  // this API, so keep their path while using the current server origin.
+  if (/^https?:/i.test(photoUrl)) {
+    try {
+      const parsedUrl = new URL(photoUrl);
+      if (parsedUrl.pathname.startsWith('/uploads/')) {
+        return `${API_BASE_URL.replace(/\/$/, '')}${parsedUrl.pathname}`;
+      }
+    } catch {
+      return PHOTO_PLACEHOLDER;
+    }
+    return photoUrl;
+  }
+
+  return `${API_BASE_URL.replace(/\/$/, '')}${photoUrl.startsWith('/') ? photoUrl : `/${photoUrl}`}`;
 };
 
 export const handlePhotoError = (event) => {
