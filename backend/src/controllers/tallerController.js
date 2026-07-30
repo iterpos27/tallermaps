@@ -1,9 +1,12 @@
 const db = require('../db');
+const { logActivity, safeLogActivity } = require('../services/audit');
+const { isNonEmptyString, isValidEmail, isValidLatitude, isValidLongitude } = require('../utils/validation');
 
 /**
  * List all workshops (talleres)
  */
 const getTalleres = async (req, res) => {
+  const includeDeleted = req.user?.role === 'ADMIN' && req.query.include_deleted === 'true';
   try {
     const result = await db.query(`
       WITH latest_visitas AS (
@@ -24,14 +27,17 @@ const getTalleres = async (req, res) => {
         t.direccion,
         t.correo,
         t.observaciones,
+        t.is_active,
+        t.deleted_at,
         t.created_at,
         lv.fecha_visita AS ultima_fecha_visita,
         u.name AS ultimo_vendedor_nombre
       FROM talleres t
       LEFT JOIN latest_visitas lv ON lv.taller_id = t.id
       LEFT JOIN users u ON u.id = lv.vendedor_id
+      WHERE ($1::boolean = TRUE OR t.is_active = TRUE)
       ORDER BY t.nombre ASC
-    `);
+    `, [includeDeleted]);
     return res.status(200).json(result.rows);
   } catch (error) {
     console.error('Error fetching talleres:', error);
@@ -48,8 +54,10 @@ const getTallerById = async (req, res) => {
   const { id } = req.params;
   try {
     const result = await db.query(
-      'SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, created_at FROM talleres WHERE id = $1',
-      [id]
+      `SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, is_active, deleted_at, created_at
+       FROM talleres
+       WHERE id = $1 AND (is_active = TRUE OR $2 = 'ADMIN')`,
+      [id, req.user.role]
     );
 
     if (result.rows.length === 0) {
@@ -71,9 +79,9 @@ const getTallerById = async (req, res) => {
 const createTaller = async (req, res) => {
   const { nombre, latitud, longitud } = req.body;
 
-  if (!nombre || latitud === undefined || longitud === undefined) {
+  if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     return res.status(400).json({ 
-      error: 'El nombre, latitud y longitud son campos requeridos.' 
+      error: 'Ingrese un nombre y coordenadas GPS válidas.'
     });
   }
 
@@ -97,6 +105,14 @@ const createTaller = async (req, res) => {
       [nombre.trim(), latitud, longitud]
     );
 
+    await safeLogActivity({
+      req,
+      action: 'TALLER_CREADO',
+      entityType: 'taller',
+      entityId: result.rows[0].id,
+      details: { nombre: result.rows[0].nombre }
+    });
+
     return res.status(201).json({
       message: 'Taller registrado exitosamente.',
       taller: result.rows[0]
@@ -116,15 +132,19 @@ const updateTaller = async (req, res) => {
   const { id } = req.params;
   const { nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones } = req.body;
 
-  if (!nombre || latitud === undefined || longitud === undefined) {
+  if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     return res.status(400).json({ 
-      error: 'El nombre, latitud y longitud son campos requeridos.' 
+      error: 'Ingrese un nombre y coordenadas GPS válidas.'
     });
+  }
+
+  if (correo && !isValidEmail(correo)) {
+    return res.status(400).json({ error: 'Ingrese un correo electrónico válido.' });
   }
 
   try {
     // Check if workshop exists
-    const checkRes = await db.query('SELECT id FROM talleres WHERE id = $1', [id]);
+    const checkRes = await db.query('SELECT id FROM talleres WHERE id = $1 AND is_active = TRUE', [id]);
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: 'Taller no encontrado.' });
     }
@@ -158,6 +178,14 @@ const updateTaller = async (req, res) => {
       ]
     );
 
+    await safeLogActivity({
+      req,
+      action: 'TALLER_ACTUALIZADO',
+      entityType: 'taller',
+      entityId: result.rows[0].id,
+      details: { nombre: result.rows[0].nombre }
+    });
+
     return res.status(200).json({
       message: 'Taller actualizado exitosamente.',
       taller: result.rows[0]
@@ -171,6 +199,104 @@ const updateTaller = async (req, res) => {
 };
 
 /**
+ * Archive a workshop while preserving its visits, photos and schedules for auditing.
+ */
+const deleteTaller = async (req, res) => {
+  const { id } = req.params;
+
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: 'Identificador de taller inválido.' });
+  }
+
+  let client;
+
+  try {
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+
+    const tallerResult = await client.query(
+      'SELECT id, nombre FROM talleres WHERE id = $1 AND is_active = TRUE FOR UPDATE',
+      [id]
+    );
+
+    if (tallerResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Taller no encontrado.' });
+    }
+
+    await client.query(
+      `UPDATE talleres
+       SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP, deleted_by = $2
+       WHERE id = $1`,
+      [id, req.user.id]
+    );
+    await logActivity({
+      req,
+      action: 'TALLER_ARCHIVADO',
+      entityType: 'taller',
+      entityId: id,
+      details: { nombre: tallerResult.rows[0].nombre },
+      client
+    });
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      message: 'Taller eliminado del sistema y del mapa. Su historial fue conservado.',
+      taller: tallerResult.rows[0]
+    });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Error deleting taller:', error);
+    return res.status(500).json({
+      error: 'Error al eliminar el taller.'
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+const restoreTaller = async (req, res) => {
+  const { id } = req.params;
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: 'Identificador de taller inválido.' });
+  }
+
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE talleres
+       SET is_active = TRUE, deleted_at = NULL, deleted_by = NULL
+       WHERE id = $1 AND is_active = FALSE
+       RETURNING id, nombre`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Taller eliminado no encontrado.' });
+    }
+
+    await logActivity({
+      req,
+      action: 'TALLER_RESTAURADO',
+      entityType: 'taller',
+      entityId: id,
+      details: { nombre: result.rows[0].nombre },
+      client
+    });
+    await client.query('COMMIT');
+    return res.status(200).json({ message: 'Taller restaurado exitosamente.', taller: result.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error restoring taller:', error);
+    return res.status(500).json({ error: 'Error al restaurar el taller.' });
+  } finally {
+    client.release();
+  }
+};
+
+/**
  * Get visit history for a specific workshop
  */
 const getTallerVisitas = async (req, res) => {
@@ -178,7 +304,10 @@ const getTallerVisitas = async (req, res) => {
 
   try {
     // Check if workshop exists
-    const checkRes = await db.query('SELECT id FROM talleres WHERE id = $1', [id]);
+    const checkRes = await db.query(
+      `SELECT id FROM talleres WHERE id = $1 AND (is_active = TRUE OR $2 = 'ADMIN')`,
+      [id, req.user.role]
+    );
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: 'Taller no encontrado.' });
     }
@@ -216,5 +345,7 @@ module.exports = {
   getTallerById,
   createTaller,
   updateTaller,
+  deleteTaller,
+  restoreTaller,
   getTallerVisitas
 };

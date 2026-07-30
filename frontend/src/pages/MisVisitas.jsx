@@ -24,7 +24,7 @@ export default function MisVisitas() {
         fecha_fin: fechaFin
       });
       setVisitas(data);
-    } catch (err) {
+    } catch {
       setError('Error al cargar sus visitas.');
     } finally {
       setLoading(false);

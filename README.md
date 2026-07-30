@@ -32,7 +32,7 @@ PGPORT=5432
 JWT_SECRET=replace-with-a-long-random-secret
 ```
 
-El backend inicializa las tablas y usuarios demo si la tabla `users` no existe.
+El backend inicializa las tablas automáticamente. En desarrollo crea un administrador local con contraseña `Admin12345` y usuarios demo. En producción no utiliza contraseñas conocidas: exige `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_USERNAME` e `INITIAL_ADMIN_PASSWORD` al crear una base nueva.
 
 ### 2. Frontend
 
@@ -75,6 +75,9 @@ Pasos:
 ```env
 NODE_ENV=production
 JWT_SECRET=un-secreto-largo-y-aleatorio
+INITIAL_ADMIN_EMAIL=admin@tuempresa.com
+INITIAL_ADMIN_USERNAME=admin
+INITIAL_ADMIN_PASSWORD=una-clave-inicial-segura-2026
 MAX_UPLOAD_MB=10
 ```
 
@@ -129,24 +132,63 @@ CORS_ORIGIN=https://tallervisitas-pro.onrender.com
 | `DATABASE_URL` | Conexion a Render Postgres. |
 | `RAILWAY_PUBLIC_DOMAIN` | Dominio publico inyectado por Railway; se usa para CORS automatico. |
 | `JWT_SECRET` | Secreto largo para firmar tokens. Obligatorio en produccion. |
+| `INITIAL_ADMIN_EMAIL` | Correo del primer administrador de una base nueva. |
+| `INITIAL_ADMIN_USERNAME` | Usuario del primer administrador. |
+| `INITIAL_ADMIN_PASSWORD` | Contraseña inicial de mínimo 10 caracteres con letras y números. |
+| `SEED_DEMO_USERS` | Use `true` solo en entornos de demostración. |
 | `CORS_ORIGIN` | Origen permitido para llamadas cross-origin. |
 | `UPLOAD_DIR` | Ruta de almacenamiento de fotos. En Railway: `${RAILWAY_VOLUME_MOUNT_PATH}/uploads`; en Render: `/var/data/uploads`. |
 | `MAX_UPLOAD_MB` | Limite de subida por foto. |
 
-## Cuentas demo iniciales
+## Cuentas locales iniciales
 
 | Rol | Usuario/correo | Contrasena |
 | --- | --- | --- |
-| ADMIN | `admin` / `admin@tallervisitas.com` | `admin123` |
-| VENDEDOR | `juan` / `juan@tallervisitas.com` | `vendedor123` |
-| VENDEDOR | `maria` / `maria@tallervisitas.com` | `vendedor123` |
+| ADMIN | `admin` / `admin@tallervisitas.com` | `Admin12345` |
+| VENDEDOR | `juan` / `juan@tallervisitas.com` | `Vendedor123` |
+| VENDEDOR | `maria` / `maria@tallervisitas.com` | `Vendedor123` |
 
-Para produccion, cambia estas contrasenas apenas termine el primer despliegue.
+Estas cuentas solo se crean automáticamente fuera de producción o cuando `SEED_DEMO_USERS=true`. Cambie la contraseña inicial del administrador después del primer ingreso.
 
-## Pendientes recomendados
+## Calidad y verificación
+
+```bash
+npm run check
+```
+
+El comando ejecuta ESLint, pruebas unitarias del backend y el build del frontend. El flujo `.github/workflows/ci.yml` repite estas verificaciones en cada pull request.
+
+## Respaldo de PostgreSQL
+
+El respaldo requiere `pg_dump` instalado y accesible. Para crear un archivo en `backend/backups`:
+
+```bash
+npm run backup --prefix backend
+```
+
+Puede configurar `BACKUP_DIR` y `PG_DUMP_PATH`. En producción, programe este comando y copie los archivos a almacenamiento externo cifrado. Pruebe periódicamente la restauración con `pg_restore`; un respaldo no verificado no debe considerarse recuperable.
+
+## Seguridad y auditoría
+
+- El login limita intentos por dirección IP.
+- Helmet agrega cabeceras de seguridad y los cuerpos JSON tienen límite.
+- Las contraseñas nuevas requieren mínimo 10 caracteres con letras y números.
+- Eliminar un taller realiza una baja lógica: desaparece del mapa y operación diaria, pero conserva visitas, fotos y programaciones.
+- Los administradores pueden mostrar y restaurar talleres eliminados.
+- La pantalla **Actividad** registra cambios de usuarios, contraseñas y talleres.
+- Cada petición incluye `X-Request-Id`; `/health` comprueba también la conexión a PostgreSQL.
+
+## Funcionamiento móvil y offline
+
+- Las fotos se redimensionan y comprimen antes de subirlas.
+- Las visitas sin conexión se guardan en IndexedDB, que admite fotos de mayor tamaño que `localStorage`.
+- La cola registra reintentos y conserva los conflictos para revisión sin perder datos.
+- El mapa agrupa talleres automáticamente según el nivel de zoom y permite buscarlos por nombre.
+
+## Próximas mejoras recomendadas
 
 - Migrar fotos a almacenamiento de objetos como Cloudflare R2 o S3 si el volumen crece.
-- Agregar migraciones versionadas en vez de `ALTER TABLE` dentro del arranque.
-- Agregar rate limiting al login y politicas de contrasena mas fuertes.
-- Evitar usuarios demo automaticos en entornos productivos definitivos.
-- Agregar tests basicos de API y build en CI antes de desplegar.
+- Adoptar migraciones SQL versionadas en vez de ejecutar ajustes de esquema durante el arranque.
+- Mover la autenticación a cookies `HttpOnly` cuando frontend y API tengan un dominio estable.
+- Integrar un servicio externo de alertas y trazas si aumenta el volumen de usuarios.
+- Añadir pruebas de integración contra una base PostgreSQL temporal.

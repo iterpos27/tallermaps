@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, User, Car, Wrench, CalendarDays } from 'lucide-react';
+import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, Car, Wrench, CalendarDays, Activity, CloudOff } from 'lucide-react';
 import { getUser, clearSession, offlineStorage } from '../api/api';
 
 export default function DashboardLayout({ children }) {
@@ -13,12 +13,14 @@ export default function DashboardLayout({ children }) {
     const handleSync = async () => {
       if (navigator.onLine) {
         try {
-          const pending = offlineStorage.getPendingVisits();
+          const pending = await offlineStorage.getPendingVisits();
           if (pending.length > 0) {
             setSyncStatus('Sincronizando visitas locales guardadas sin conexión...');
-            const count = await offlineStorage.syncPendingVisits((msg) => setSyncStatus(msg));
-            if (count > 0) {
-              setSyncStatus(`¡Sincronización exitosa! Se subieron ${count} visitas registradas offline.`);
+            const { syncedCount, conflictCount } = await offlineStorage.syncPendingVisits((msg) => setSyncStatus(msg));
+            if (conflictCount > 0) {
+              setSyncStatus(`${conflictCount} visita(s) offline requieren revisión. Los datos permanecen guardados en este dispositivo.`);
+            } else if (syncedCount > 0) {
+              setSyncStatus(`¡Sincronización exitosa! Se subieron ${syncedCount} visitas registradas offline.`);
               setTimeout(() => setSyncStatus(''), 4000);
             } else {
               setSyncStatus('');
@@ -57,6 +59,7 @@ export default function DashboardLayout({ children }) {
     { to: '/mapa', label: 'Mapa Talleres', icon: Map },
     { to: '/vendedores', label: 'Vendedores', icon: Users },
     { to: '/talleres', label: 'Talleres', icon: Wrench },
+    { to: '/actividad', label: 'Actividad', icon: Activity },
   ];
 
   const vendedorLinks = [
@@ -64,6 +67,7 @@ export default function DashboardLayout({ children }) {
     { to: '/programar-visitas', label: 'Programar', icon: CalendarDays },
     { to: '/registrar-visita', label: 'Registrar Visita', icon: PlusCircle },
     { to: '/mis-visitas', label: 'Mis Visitas', icon: ClipboardList },
+    { to: '/visitas-offline', label: 'Pendientes Offline', icon: CloudOff },
   ];
 
   const activeLinks = isAdmin ? adminLinks : vendedorLinks;

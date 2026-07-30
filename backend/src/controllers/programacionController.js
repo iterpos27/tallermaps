@@ -85,7 +85,7 @@ const createProgramacion = async (req, res) => {
   }
 
   try {
-    const taller = await db.query('SELECT id FROM talleres WHERE id = $1', [taller_id]);
+    const taller = await db.query('SELECT id FROM talleres WHERE id = $1 AND is_active = TRUE', [taller_id]);
     if (taller.rows.length === 0) {
       return res.status(404).json({ error: 'Taller no encontrado.' });
     }

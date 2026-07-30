@@ -9,7 +9,6 @@ export default function DashboardAdmin() {
   
   // Data lists
   const [visitas, setVisitas] = useState([]);
-  const [talleres, setTalleres] = useState([]);
   const [vendedores, setVendedores] = useState([]);
   
   // Filters
@@ -36,8 +35,6 @@ export default function DashboardAdmin() {
           api.talleres.list(),
           api.users.list()
         ]);
-        
-        setTalleres(talleresList);
         
         const sellers = usersList.filter(u => u.role === 'VENDEDOR');
         setVendedores(sellers);
@@ -69,7 +66,7 @@ export default function DashboardAdmin() {
       if (!searchTerm && !selectedVendedor && !fechaInicio && !fechaFin) {
         setStats(prev => ({ ...prev, totalVisitas: data.length }));
       }
-    } catch (err) {
+    } catch {
       setError('Error al obtener la lista de visitas.');
     } finally {
       setLoading(false);

@@ -18,6 +18,12 @@ router.get('/:id', tallerController.getTallerById);
 // PUT /api/talleres/:id (Only ADMIN can edit workshop details)
 router.put('/:id', authorizeRoles('ADMIN'), tallerController.updateTaller);
 
+// DELETE /api/talleres/:id (Only ADMIN can permanently delete a workshop)
+router.delete('/:id', authorizeRoles('ADMIN'), tallerController.deleteTaller);
+
+// POST /api/talleres/:id/restore (Only ADMIN can restore an archived workshop)
+router.post('/:id/restore', authorizeRoles('ADMIN'), tallerController.restoreTaller);
+
 // GET /api/talleres/:id/visitas (List visits history for a single workshop)
 router.get('/:id/visitas', tallerController.getTallerVisitas);
 

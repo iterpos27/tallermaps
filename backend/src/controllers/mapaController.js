@@ -27,6 +27,7 @@ const getTalleresMapa = async (req, res) => {
       FROM talleres t
       LEFT JOIN latest_visitas lv ON t.id = lv.taller_id
       LEFT JOIN users u ON lv.vendedor_id = u.id
+      WHERE t.is_active = TRUE
       ORDER BY t.nombre ASC;
     `;
 

@@ -16,6 +16,8 @@ import MapaTalleres from './pages/MapaTalleres';
 import GestionVendedores from './pages/GestionVendedores';
 import GestionTalleres from './pages/GestionTalleres';
 import ProgramacionAdmin from './pages/ProgramacionAdmin';
+import ActividadAdmin from './pages/ActividadAdmin';
+import VisitasOffline from './pages/VisitasOffline';
 
 /**
  * Route Guard for authenticated users
@@ -99,6 +101,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/visitas-offline"
+          element={
+            <ProtectedRoute allowedRoles={['VENDEDOR']}>
+              <DashboardLayout>
+                <VisitasOffline />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Admin-Only Routes */}
         <Route
@@ -138,6 +150,17 @@ export default function App() {
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <DashboardLayout>
                 <GestionTalleres />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/actividad"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <DashboardLayout>
+                <ActividadAdmin />
               </DashboardLayout>
             </ProtectedRoute>
           }
