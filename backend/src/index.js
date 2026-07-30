@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { initDatabase } = require('./db');
 const db = require('./db');
+const { uploadDir } = require('./services/storage');
 const { requestLogger } = require('./middlewares/requestLogger');
 require('dotenv').config();
 
@@ -63,7 +64,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Serve uploaded images statically.
-const uploadsPath = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+const uploadsPath = uploadDir;
 app.use('/uploads', express.static(uploadsPath));
 
 // Mount API routes

@@ -764,25 +764,6 @@ body {
 }
 
 /* Map Screen styling */
-.custom-cluster-icon {
-  background: transparent;
-  border: 0;
-}
-
-.workshop-cluster {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: var(--primary);
-  border: 3px solid #fff;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.35);
-  font-weight: 800;
-  font-size: 0.85rem;
-}
 .map-view-container {
   height: calc(100vh - 170px);
   border-radius: var(--radius-md);
@@ -894,6 +875,119 @@ body {
 
 .premium-table tr:hover td {
   background: #f8fafc;
+}
+
+/* Administrative activity */
+.activity-panel {
+  overflow: hidden;
+  padding: 0;
+}
+
+.activity-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-light);
+  background: #ffffff;
+}
+
+.activity-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.activity-panel-title h2 {
+  color: var(--primary);
+  font-size: 1.08rem;
+}
+
+.activity-panel-title p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.activity-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.activity-total,
+.activity-entity,
+.activity-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.activity-total {
+  padding: 6px 10px;
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.activity-table-scroll {
+  overflow-x: auto;
+}
+
+.activity-table {
+  min-width: 900px;
+}
+
+.activity-date {
+  white-space: nowrap;
+  color: var(--text-muted) !important;
+}
+
+.activity-badge {
+  padding: 5px 9px;
+}
+
+.activity-badge-primary {
+  color: #1d5596;
+  background: #eaf2fb;
+}
+
+.activity-badge-success {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.activity-badge-danger {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.activity-entity {
+  padding: 4px 8px;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.activity-ip {
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 0.78rem;
+}
+
+.visit-img.is-placeholder,
+.map-popup-img.is-placeholder {
+  object-fit: cover;
+  transform: none !important;
 }
 
 /* Mobile Bottom Navigation Menu: Light theme */
@@ -1047,6 +1141,11 @@ body {
 
   .visits-grid {
     grid-template-columns: 1fr;
+  }
+
+  .activity-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

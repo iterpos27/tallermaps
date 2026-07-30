@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, Search, Calendar, MapPin, ExternalLink, X, FileText } from 'lucide-react';
-import { api, API_BASE_URL } from '../api/api';
+import { api } from '../api/api';
+import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 
 export default function MisVisitas() {
   const [loading, setLoading] = useState(true);
@@ -126,15 +127,13 @@ export default function MisVisitas() {
               <div 
                 className="visit-img-container" 
                 style={{ cursor: 'pointer' }}
-                onClick={() => setActivePhoto(`${API_BASE_URL}${visita.foto_url}`)}
+                onClick={() => setActivePhoto(getPhotoUrl(visita.foto_url))}
               >
                 <img
-                  src={`${API_BASE_URL}${visita.foto_url}`}
+                  src={getPhotoUrl(visita.foto_url)}
                   alt={visita.taller_nombre}
                   className="visit-img"
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=400&auto=format&fit=crop';
-                  }}
+                  onError={handlePhotoError}
                 />
               </div>
               <div className="visit-body">
@@ -219,6 +218,7 @@ export default function MisVisitas() {
             src={activePhoto} 
             alt="Visita ampliada" 
             style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}
+            onError={handlePhotoError}
             onClick={(e) => e.stopPropagation()} 
           />
         </div>

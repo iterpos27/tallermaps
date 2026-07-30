@@ -13,6 +13,12 @@ const ACTION_LABELS = {
   CONTRASENA_ACTUALIZADA: 'Contraseña actualizada'
 };
 
+const getActionTone = (action) => {
+  if (action.includes('ARCHIVADO')) return 'danger';
+  if (action.includes('CREADO') || action.includes('RESTAURADO')) return 'success';
+  return 'primary';
+};
+
 export default function ActividadAdmin() {
   const [data, setData] = useState({ items: [], total: 0, page: 1, limit: 25 });
   const [page, setPage] = useState(1);
@@ -59,22 +65,37 @@ export default function ActividadAdmin() {
           <p>Aún no existen actividades registradas.</p>
         </div>
       ) : (
-        <div className="glass-panel" style={{ overflowX: 'auto', padding: 0 }}>
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th>Fecha</th><th>Administrador</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr></thead>
-            <tbody>
-              {data.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{new Date(item.created_at).toLocaleString('es-EC')}</td>
-                  <td>{item.user_name || item.username || 'Sistema'}</td>
-                  <td><strong>{ACTION_LABELS[item.action] || item.action}</strong></td>
-                  <td>{item.entity_type} #{item.entity_id || '—'}</td>
-                  <td>{item.details?.nombre || item.details?.username || '—'}</td>
-                  <td>{item.ip_address || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="glass-panel activity-panel">
+          <div className="activity-panel-header">
+            <div className="activity-panel-title">
+              <span className="activity-icon"><Activity size={20} /></span>
+              <div>
+                <h2>Historial de cambios</h2>
+                <p>Acciones sensibles realizadas por los administradores</p>
+              </div>
+            </div>
+            <span className="activity-total">{data.total} {data.total === 1 ? 'registro' : 'registros'}</span>
+          </div>
+
+          <div className="activity-table-scroll">
+            <table className="premium-table activity-table">
+              <thead>
+                <tr><th>Fecha</th><th>Administrador</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr>
+              </thead>
+              <tbody>
+                {data.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="activity-date">{new Date(item.created_at).toLocaleString('es-EC')}</td>
+                    <td><strong>{item.user_name || item.username || 'Sistema'}</strong></td>
+                    <td><span className={`activity-badge activity-badge-${getActionTone(item.action)}`}>{ACTION_LABELS[item.action] || item.action}</span></td>
+                    <td><span className="activity-entity">{item.entity_type} #{item.entity_id || '—'}</span></td>
+                    <td>{item.details?.nombre || item.details?.username || '—'}</td>
+                    <td><code className="activity-ip">{item.ip_address || '—'}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
