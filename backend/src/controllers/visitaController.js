@@ -1,6 +1,7 @@
 const db = require('../db');
 const { isValidLatitude, isValidLongitude } = require('../utils/validation');
 const { storageService } = require('../services/storage');
+const { logActivity } = require('../services/audit');
 
 /**
  * List visits with optional filters (ADMIN sees all, VENDEDOR sees only their own)
@@ -319,8 +320,71 @@ const createVisita = async (req, res) => {
   }
 };
 
+/**
+ * Permanently delete a visit. The route restricts this operation to ADMIN users.
+ * If the visit completed a schedule, that schedule becomes pending again.
+ */
+const deleteVisita = async (req, res) => {
+  const { id } = req.params;
+
+  if (!/^\d+$/.test(id)) {
+    return res.status(400).json({ error: 'Identificador de visita invalido.' });
+  }
+
+  const client = await db.pool.connect();
+  let visita;
+
+  try {
+    await client.query('BEGIN');
+    const visitResult = await client.query(
+      `SELECT v.id, v.foto_url, v.programacion_id, t.nombre AS taller_nombre,
+              u.name AS vendedor_nombre
+       FROM visitas v
+       JOIN talleres t ON t.id = v.taller_id
+       JOIN users u ON u.id = v.vendedor_id
+       WHERE v.id = $1
+       FOR UPDATE OF v`,
+      [id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Visita no encontrada.' });
+    }
+
+    visita = visitResult.rows[0];
+    await client.query(
+      `UPDATE programaciones_visita
+       SET estado = 'PENDIENTE', visita_id = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE visita_id = $1 OR id = $2`,
+      [id, visita.programacion_id]
+    );
+    await client.query('DELETE FROM visitas WHERE id = $1', [id]);
+    await logActivity({
+      req,
+      action: 'VISITA_ELIMINADA',
+      entityType: 'visita',
+      entityId: id,
+      details: { taller: visita.taller_nombre, vendedor: visita.vendedor_nombre },
+      client
+    });
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error deleting visit:', error);
+    return res.status(500).json({ error: 'Error al eliminar la visita.' });
+  } finally {
+    client.release();
+  }
+
+  // Remove the file only after the database transaction has committed.
+  await storageService.deleteFile(visita.foto_url);
+  return res.status(200).json({ message: 'Visita eliminada exitosamente.' });
+};
+
 module.exports = {
   getVisitas,
   getVisitaById,
-  createVisita
+  createVisita,
+  deleteVisita
 };

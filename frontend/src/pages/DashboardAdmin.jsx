@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Calendar, MapPin, ExternalLink, Users, ClipboardList, Shield, X, Map, AlertTriangle, CheckCircle, User } from 'lucide-react';
+import { Search, Calendar, MapPin, ExternalLink, Users, ClipboardList, Shield, X, Map, AlertTriangle, CheckCircle, User, Trash2 } from 'lucide-react';
 import { api } from '../api/api';
 import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 
@@ -26,6 +26,7 @@ export default function DashboardAdmin() {
   });
 
   const [selectedVisita, setSelectedVisita] = useState(null);
+  const [deletingVisitId, setDeletingVisitId] = useState(null);
   const [error, setError] = useState('');
 
   // Fetch initial static support data (talleres and users for stats/dropdowns)
@@ -87,6 +88,29 @@ export default function DashboardAdmin() {
     setSelectedVendedor('');
     setFechaInicio('');
     setFechaFin('');
+  };
+
+  const handleDeleteVisita = async (visita) => {
+    const confirmed = window.confirm(
+      `\u00bfEliminar permanentemente la visita a "${visita.taller_nombre}"?\n\nTambi\u00e9n se eliminar\u00e1 su foto y esta acci\u00f3n no se puede deshacer.`
+    );
+    if (!confirmed) return;
+
+    setDeletingVisitId(visita.id);
+    setError('');
+    try {
+      await api.visitas.delete(visita.id);
+      setVisitas((current) => current.filter((item) => item.id !== visita.id));
+      setStats((current) => ({
+        ...current,
+        totalVisitas: Math.max(0, current.totalVisitas - 1)
+      }));
+      if (selectedVisita?.id === visita.id) setSelectedVisita(null);
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo eliminar la visita.');
+    } finally {
+      setDeletingVisitId(null);
+    }
   };
 
   const handleExportCSV = () => {
@@ -496,6 +520,18 @@ export default function DashboardAdmin() {
                     <span>Google Maps</span>
                     <ExternalLink size={12} />
                   </a>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    style={{ width: 'auto', padding: '8px 12px', fontSize: '0.82rem' }}
+                    onClick={() => handleDeleteVisita(visita)}
+                    disabled={deletingVisitId === visita.id}
+                    title="Eliminar visita"
+                    aria-label={`Eliminar visita a ${visita.taller_nombre}`}
+                  >
+                    <Trash2 size={14} />
+                    <span>{deletingVisitId === visita.id ? 'Eliminando...' : 'Eliminar'}</span>
+                  </button>
                 </div>
               </div>
             </div>

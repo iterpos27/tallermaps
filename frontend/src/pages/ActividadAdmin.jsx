@@ -10,11 +10,12 @@ const ACTION_LABELS = {
   TALLER_ACTUALIZADO: 'Taller actualizado',
   USUARIO_CREADO: 'Usuario creado',
   USUARIO_ACTUALIZADO: 'Usuario actualizado',
+  VISITA_ELIMINADA: 'Visita eliminada',
   CONTRASENA_ACTUALIZADA: 'Contraseña actualizada'
 };
 
 const getActionTone = (action) => {
-  if (action.includes('ARCHIVADO')) return 'danger';
+  if (action.includes('ARCHIVADO') || action.includes('ELIMINADA')) return 'danger';
   if (action.includes('CREADO') || action.includes('RESTAURADO')) return 'success';
   return 'primary';
 };
@@ -89,7 +90,7 @@ export default function ActividadAdmin() {
                     <td><strong>{item.user_name || item.username || 'Sistema'}</strong></td>
                     <td><span className={`activity-badge activity-badge-${getActionTone(item.action)}`}>{ACTION_LABELS[item.action] || item.action}</span></td>
                     <td><span className="activity-entity">{item.entity_type} #{item.entity_id || '—'}</span></td>
-                    <td>{item.details?.nombre || item.details?.username || '—'}</td>
+                    <td>{item.details?.nombre || item.details?.username || item.details?.taller || '—'}</td>
                     <td><code className="activity-ip">{item.ip_address || '—'}</code></td>
                   </tr>
                 ))}
