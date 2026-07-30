@@ -1,4 +1,5 @@
 const db = require('../db');
+const { isValidLatitude, isValidLongitude } = require('../utils/validation');
 const { storageService } = require('../services/storage');
 
 /**
@@ -162,10 +163,10 @@ const createVisita = async (req, res) => {
     return res.status(400).json({ error: 'La foto de la visita es requerida.' });
   }
 
-  if (latitud === undefined || longitud === undefined) {
+  if (!isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     // If upload fails in client, delete file to clean up
     if (file) await storageService.deleteFile(`/uploads/${file.filename}`);
-    return res.status(400).json({ error: 'Las coordenadas GPS son requeridas.' });
+    return res.status(400).json({ error: 'Las coordenadas GPS no son válidas.' });
   }
 
   try {
@@ -174,7 +175,7 @@ const createVisita = async (req, res) => {
 
     if (taller_id) {
       // Check if workshop exists
-      const tallerCheck = await db.query('SELECT id FROM talleres WHERE id = $1', [taller_id]);
+      const tallerCheck = await db.query('SELECT id FROM talleres WHERE id = $1 AND is_active = TRUE', [taller_id]);
       if (tallerCheck.rows.length === 0) {
         await storageService.deleteFile(`/uploads/${file.filename}`);
         return res.status(400).json({ error: 'El taller seleccionado no existe.' });
@@ -256,7 +257,7 @@ const createVisita = async (req, res) => {
     let distanciaMetros = 0;
 
     if (taller_id) {
-      const tallerCheck = await db.query('SELECT latitud, longitud FROM talleres WHERE id = $1', [taller_id]);
+      const tallerCheck = await db.query('SELECT latitud, longitud FROM talleres WHERE id = $1 AND is_active = TRUE', [taller_id]);
       if (tallerCheck.rows.length > 0 && tallerCheck.rows[0].latitud && tallerCheck.rows[0].longitud) {
         const tLat = parseFloat(tallerCheck.rows[0].latitud);
         const tLng = parseFloat(tallerCheck.rows[0].longitud);

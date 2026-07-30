@@ -1,4 +1,10 @@
 // API Client Wrapper for TallerVisitas Pro
+import {
+  getPendingOfflineVisits,
+  savePendingOfflineVisit,
+  removePendingOfflineVisit,
+  updatePendingOfflineVisit
+} from '../storage/offlineVisits';
 
 // Detect server hostname to allow mobile devices on the same network to connect.
 // If localhost is used in mobile, it fails, so we default to the browser's current IP.
@@ -79,6 +85,9 @@ const makeRequest = async (endpoint, options = {}) => {
 
   if (!response.ok) {
     const errorMsg = data.error || `Error del servidor (${response.status})`;
+    const requestError = new Error(errorMsg);
+    requestError.status = response.status;
+    requestError.data = data;
     
     // Auto logout if token expires or is invalid
     if (response.status === 401 || response.status === 403) {
@@ -88,7 +97,7 @@ const makeRequest = async (endpoint, options = {}) => {
       }
     }
     
-    throw new Error(errorMsg);
+    throw requestError;
   }
 
   return data;
@@ -127,8 +136,8 @@ export const api = {
   },
   
   talleres: {
-    list: () => 
-      makeRequest('/talleres', { method: 'GET' }),
+    list: ({ includeDeleted = false } = {}) =>
+      makeRequest(`/talleres${includeDeleted ? '?include_deleted=true' : ''}`, { method: 'GET' }),
     get: (id) => 
       makeRequest(`/talleres/${id}`, { method: 'GET' }),
     create: (tallerData) => 
@@ -143,6 +152,8 @@ export const api = {
       }),
     delete: (id) =>
       makeRequest(`/talleres/${id}`, { method: 'DELETE' }),
+    restore: (id) =>
+      makeRequest(`/talleres/${id}/restore`, { method: 'POST' }),
     visitas: (id) => 
       makeRequest(`/talleres/${id}/visitas`, { method: 'GET' })
   },
@@ -209,6 +220,11 @@ export const api = {
   mapa: {
     talleres: () => 
       makeRequest('/mapa/talleres', { method: 'GET' })
+  },
+
+  audit: {
+    list: ({ page = 1, limit = 25 } = {}) =>
+      makeRequest(`/audit?page=${page}&limit=${limit}`, { method: 'GET' })
   }
 };
 
@@ -216,52 +232,28 @@ export const api = {
  * Offline Mode Caching and Sync Utilities
  */
 export const offlineStorage = {
-  getPendingVisits: () => {
-    try {
-      const data = localStorage.getItem('pending_visitas');
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
-  },
-
-  savePendingVisit: (visit) => {
-    try {
-      const pending = offlineStorage.getPendingVisits();
-      pending.push({
-        id: `local-${Date.now()}`,
-        ...visit
-      });
-      localStorage.setItem('pending_visitas', JSON.stringify(pending));
-    } catch (e) {
-      console.error('Failed to save pending visit locally:', e);
-    }
-  },
-
-  removePendingVisit: (id) => {
-    try {
-      const pending = offlineStorage.getPendingVisits();
-      const filtered = pending.filter(v => v.id !== id);
-      localStorage.setItem('pending_visitas', JSON.stringify(filtered));
-    } catch (e) {
-      console.error('Failed to remove pending visit:', e);
-    }
-  },
+  getPendingVisits: getPendingOfflineVisits,
+  savePendingVisit: savePendingOfflineVisit,
+  removePendingVisit: removePendingOfflineVisit,
 
   syncPendingVisits: async (onProgress) => {
-    const pending = offlineStorage.getPendingVisits();
-    if (pending.length === 0) return 0;
+    const pending = await offlineStorage.getPendingVisits();
+    if (pending.length === 0) return { syncedCount: 0, conflictCount: 0 };
 
     let syncedCount = 0;
+    let conflictCount = 0;
 
     for (const visit of pending) {
       try {
         if (onProgress) onProgress(`Sincronizando: ${visit.taller_nombre || 'Visita'}`);
         
-        // Convert base64 dataURL back to a File object
-        const responseBlob = await fetch(visit.fotoBase64);
-        const blob = await responseBlob.blob();
-        const file = new File([blob], `visita-offline-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        let blob = visit.photoBlob;
+        if (!blob && visit.fotoBase64) {
+          const responseBlob = await fetch(visit.fotoBase64);
+          blob = await responseBlob.blob();
+        }
+        if (!blob) throw new Error('La foto pendiente no está disponible.');
+        const file = new File([blob], `visita-offline-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
 
         const formData = new FormData();
         if (visit.taller_id) {
@@ -283,15 +275,28 @@ export const offlineStorage = {
         await api.visitas.create(formData);
         
         // Remove from pending
-        offlineStorage.removePendingVisit(visit.id);
+        await offlineStorage.removePendingVisit(visit.id);
         syncedCount++;
       } catch (err) {
         console.error('Error syncing visit:', visit, err);
-        // Break loop if server is down, keeping them in cache
+        const isConflict = [400, 404, 409].includes(err.status);
+        await updatePendingOfflineVisit({
+          ...visit,
+          attempts: (visit.attempts || 0) + 1,
+          lastError: err.message,
+          lastAttemptAt: new Date().toISOString(),
+          status: isConflict ? 'needs_attention' : 'pending'
+        });
+        if (isConflict) {
+          conflictCount++;
+          if (onProgress) onProgress(`Una visita requiere revisión: ${err.message}`);
+          continue;
+        }
+        // Stop to avoid repeatedly hitting an unavailable server.
         break;
       }
     }
 
-    return syncedCount;
+    return { syncedCount, conflictCount };
   }
 };

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, Upload, Sparkles, X } from 'lucide-react';
+import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { api, offlineStorage } from '../api/api';
+import { compressImage } from '../utils/image';
 
 export default function RegistrarVisita() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function RegistrarVisita() {
   // Image states
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   
   // GPS states
   const [coords, setCoords] = useState(null);
@@ -142,13 +144,18 @@ export default function RegistrarVisita() {
   };
 
   // Native mobile camera operations
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (photoPreview) URL.revokeObjectURL(photoPreview);
-      setPhotoFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setPhotoPreview(previewUrl);
+      setPhotoProcessing(true);
+      try {
+        const optimizedFile = await compressImage(file);
+        if (photoPreview) URL.revokeObjectURL(photoPreview);
+        setPhotoFile(optimizedFile);
+        setPhotoPreview(URL.createObjectURL(optimizedFile));
+      } finally {
+        setPhotoProcessing(false);
+      }
     }
   };
 
@@ -216,28 +223,21 @@ export default function RegistrarVisita() {
       // Fallback to offline mode if offline or request failed
       if (!navigator.onLine || err.message === 'Failed to fetch' || err.message.toLowerCase().includes('network')) {
         try {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64data = reader.result;
-            const offlineVisit = {
-              taller_id: tallerMode === 'existente' ? selectedTallerId : null,
-              taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
-              latitud: coords.latitude,
-              longitud: coords.longitude,
-              observacion: observacion.trim(),
-              programacion_id: selectedProgramacionId || null,
-              fotoBase64: base64data
-            };
-            
-            offlineStorage.savePendingVisit(offlineVisit);
-            
-            setSuccess('¡Sin conexión! Visita guardada localmente en el celular. Se sincronizará automáticamente al recuperar internet.');
-            setTimeout(() => {
-              navigate('/dashboard');
-            }, 2500);
-          };
-          reader.readAsDataURL(photoFile);
-        } catch (readErr) {
+          await offlineStorage.savePendingVisit({
+            taller_id: tallerMode === 'existente' ? selectedTallerId : null,
+            taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
+            latitud: coords.latitude,
+            longitud: coords.longitude,
+            observacion: observacion.trim(),
+            programacion_id: selectedProgramacionId || null,
+            photoBlob: photoFile
+          });
+
+          setSuccess('¡Sin conexión! Visita guardada localmente en el celular. Se sincronizará automáticamente al recuperar internet.');
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 2500);
+        } catch {
           setError('Error al guardar la visita localmente.');
           setLoading(false);
         }
@@ -482,10 +482,10 @@ export default function RegistrarVisita() {
                 onClick={() => fileInputRef.current?.click()}
                 className="btn btn-primary"
                 style={{ width: '100%' }}
-                disabled={loading}
+                disabled={loading || photoProcessing}
               >
                 <Camera size={18} />
-                <span>Tomar foto</span>
+                <span>{photoProcessing ? 'Optimizando foto...' : 'Tomar foto'}</span>
               </button>
             )}
           </div>

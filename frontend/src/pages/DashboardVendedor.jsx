@@ -15,7 +15,7 @@ export default function DashboardVendedor() {
       try {
         const data = await api.visitas.list();
         setVisitas(data);
-      } catch (err) {
+      } catch {
         setError('No se pudo cargar la información de visitas.');
       } finally {
         setLoading(false);

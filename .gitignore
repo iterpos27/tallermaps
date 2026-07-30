@@ -18,6 +18,7 @@ yarn-error.log*
 
 # Runtime uploads
 backend/uploads/
+backend/backups/
 
 # System and editor files
 .DS_Store

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Calendar, User, Eye, X, Navigation } from 'lucide-react';
 import { api, API_BASE_URL } from '../api/api';
@@ -67,11 +67,47 @@ const createRouteNumberIcon = (number) => {
 const ECUADOR_CENTER = [-1.831239, -78.183406];
 const DEFAULT_ZOOM = 7;
 
+const createClusterIcon = (count) => L.divIcon({
+  html: `<div class="workshop-cluster">${count}</div>`,
+  className: 'custom-cluster-icon',
+  iconSize: [42, 42],
+  iconAnchor: [21, 21]
+});
+
+function MapZoomWatcher({ onZoom }) {
+  useMapEvents({ zoomend: (event) => onZoom(event.target.getZoom()) });
+  return null;
+}
+
+const clusterWorkshops = (workshops, zoom) => {
+  const cellSize = zoom <= 7 ? 1 : zoom <= 10 ? 0.1 : zoom <= 13 ? 0.02 : 0.002;
+  const groups = new Map();
+
+  workshops.forEach((workshop) => {
+    const lat = Number(workshop.latitud);
+    const lng = Number(workshop.longitud);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const key = `${Math.floor(lat / cellSize)}:${Math.floor(lng / cellSize)}`;
+    const group = groups.get(key) || [];
+    group.push({ ...workshop, parsedLat: lat, parsedLng: lng });
+    groups.set(key, group);
+  });
+
+  return [...groups.entries()].map(([key, items]) => ({
+    key,
+    items,
+    lat: items.reduce((sum, item) => sum + item.parsedLat, 0) / items.length,
+    lng: items.reduce((sum, item) => sum + item.parsedLng, 0) / items.length
+  }));
+};
+
 export default function MapaTalleres() {
   const [talleres, setTalleres] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activePhoto, setActivePhoto] = useState(null);
+  const [mapSearch, setMapSearch] = useState('');
+  const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   
   // Routing states
   const [vendedores, setVendedores] = useState([]);
@@ -84,7 +120,7 @@ export default function MapaTalleres() {
       try {
         const data = await api.mapa.talleres();
         setTalleres(data);
-      } catch (err) {
+      } catch {
         setError('Error al cargar la información del mapa.');
       } finally {
         setLoading(false);
@@ -126,6 +162,16 @@ export default function MapaTalleres() {
     };
     fetchRoute();
   }, [selectedVendedor, selectedDate]);
+
+  const filteredWorkshops = useMemo(() => {
+    const term = mapSearch.trim().toLowerCase();
+    return term ? talleres.filter((taller) => taller.nombre.toLowerCase().includes(term)) : talleres;
+  }, [mapSearch, talleres]);
+
+  const workshopGroups = useMemo(
+    () => clusterWorkshops(filteredWorkshops, mapZoom),
+    [filteredWorkshops, mapZoom]
+  );
 
   return (
     <div>
@@ -189,6 +235,16 @@ export default function MapaTalleres() {
             Limpiar Ruta
           </button>
         )}
+
+        <input
+          type="search"
+          className="form-input"
+          value={mapSearch}
+          onChange={(event) => setMapSearch(event.target.value)}
+          placeholder="Buscar taller en el mapa"
+          aria-label="Buscar taller en el mapa"
+          style={{ padding: '8px 12px', height: '40px', fontSize: '0.85rem' }}
+        />
       </div>
 
       {loading ? (
@@ -209,14 +265,29 @@ export default function MapaTalleres() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
+            <MapZoomWatcher onZoom={setMapZoom} />
 
-            {talleres.map((taller) => {
-              const lat = parseFloat(taller.latitud);
-              const lng = parseFloat(taller.longitud);
+            {workshopGroups.map((group) => {
+              if (group.items.length > 1) {
+                return (
+                  <Marker key={`cluster-${group.key}`} position={[group.lat, group.lng]} icon={createClusterIcon(group.items.length)}>
+                    <Popup>
+                      <div style={{ minWidth: '220px' }}>
+                        <strong>{group.items.length} talleres en esta zona</strong>
+                        <ul style={{ margin: '10px 0 0', paddingLeft: '18px', maxHeight: '180px', overflowY: 'auto' }}>
+                          {group.items.map((item) => <li key={item.id}>{item.nombre}</li>)}
+                        </ul>
+                        <small>Acérquese en el mapa para separarlos.</small>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              }
+
+              const taller = group.items[0];
+              const lat = taller.parsedLat;
+              const lng = taller.parsedLng;
               const hasVisits = !!taller.fecha_visita;
-
-              // Validate coordinates
-              if (isNaN(lat) || isNaN(lng)) return null;
 
               return (
                 <Marker 

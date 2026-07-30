@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_BASE_URL } from '../api/api';
-import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2 } from 'lucide-react';
+import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import Modal from '../components/Modal';
+import AlertBanner from '../components/AlertBanner';
+
+const PAGE_SIZE = 12;
 
 export default function GestionTalleres() {
   const [talleres, setTalleres] = useState([]);
@@ -8,6 +12,8 @@ export default function GestionTalleres() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [page, setPage] = useState(1);
 
   // Edit Modal States
   const [editingTaller, setEditingTaller] = useState(null);
@@ -33,9 +39,9 @@ export default function GestionTalleres() {
   const fetchTalleres = async () => {
     try {
       setLoading(true);
-      const data = await api.talleres.list();
+      const data = await api.talleres.list({ includeDeleted: showArchived });
       setTalleres(data);
-    } catch (err) {
+    } catch {
       setError('Error al obtener la lista de talleres.');
     } finally {
       setLoading(false);
@@ -44,7 +50,7 @@ export default function GestionTalleres() {
 
   useEffect(() => {
     fetchTalleres();
-  }, []);
+  }, [showArchived]);
 
   const handleEditClick = (taller) => {
     setEditingTaller(taller);
@@ -127,9 +133,27 @@ export default function GestionTalleres() {
     }
   };
 
+  const handleRestore = async (taller) => {
+    setError('');
+    setSuccess('');
+    try {
+      await api.talleres.restore(taller.id);
+      setSuccess(`El taller "${taller.nombre}" fue restaurado y volverá a aparecer en el mapa.`);
+      await fetchTalleres();
+    } catch (err) {
+      setError(err.message || 'Error al restaurar el taller.');
+    }
+  };
+
   const filteredTalleres = talleres.filter((t) =>
     t.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const totalPages = Math.max(1, Math.ceil(filteredTalleres.length / PAGE_SIZE));
+  const paginatedTalleres = filteredTalleres.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <div>
@@ -140,20 +164,11 @@ export default function GestionTalleres() {
         </div>
       </div>
 
-      {success && !editingTaller && (
-        <div className="alert alert-success" style={{ marginBottom: '20px' }}>
-          <span>{success}</span>
-        </div>
-      )}
-
-      {error && !editingTaller && (
-        <div className="alert alert-danger" style={{ marginBottom: '20px' }}>
-          <span>{error}</span>
-        </div>
-      )}
+      {!editingTaller && <AlertBanner type="success" style={{ marginBottom: '20px' }}>{success}</AlertBanner>}
+      {!editingTaller && <AlertBanner style={{ marginBottom: '20px' }}>{error}</AlertBanner>}
 
       {/* Filter bar */}
-      <div className="filter-bar glass-panel" style={{ marginBottom: '24px', padding: '16px 20px' }}>
+      <div className="filter-bar glass-panel" style={{ marginBottom: '24px', padding: '16px 20px', display: 'flex', alignItems: 'end', gap: '20px', flexWrap: 'wrap' }}>
         <div className="form-group" style={{ marginBottom: 0, width: '100%', maxWidth: '400px' }}>
           <label className="form-label">Buscar Taller</label>
           <div className="input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
@@ -162,12 +177,20 @@ export default function GestionTalleres() {
               className="form-input"
               placeholder="Escriba el nombre..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{ paddingLeft: '40px' }}
             />
             <Search size={18} style={{ position: 'absolute', left: '14px', color: 'var(--text-muted)' }} />
           </div>
         </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', paddingBottom: '10px' }}>
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => { setShowArchived(event.target.checked); setPage(1); }}
+          />
+          <span>Mostrar talleres eliminados</span>
+        </label>
       </div>
 
       {loading ? (
@@ -193,11 +216,14 @@ export default function GestionTalleres() {
               </tr>
             </thead>
             <tbody>
-              {filteredTalleres.map((taller) => (
-                <tr key={taller.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              {paginatedTalleres.map((taller) => (
+                <tr key={taller.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: taller.is_active === false ? 0.65 : 1 }}>
                   <td style={{ padding: '16px' }}>
                     <div style={{ fontWeight: '600', color: 'var(--text-dark)', fontSize: '0.95rem', marginBottom: '4px' }}>
                       {taller.nombre}
+                      {taller.is_active === false && (
+                        <span style={{ marginLeft: '8px', padding: '2px 6px', borderRadius: '999px', background: '#f1f5f9', color: '#64748b', fontSize: '0.7rem' }}>Eliminado</span>
+                      )}
                     </div>
                     {(taller.propietario || taller.direccion || taller.telefono || taller.correo || taller.observaciones) && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -245,28 +271,37 @@ export default function GestionTalleres() {
                         <FileText size={14} />
                         <span>Historial</span>
                       </button>
-                      <button
-                        onClick={() => handleEditClick(taller)}
-                        className="btn btn-primary"
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }}
-                        title="Editar Taller"
-                      >
-                        <Edit size={14} />
-                        <span>Editar</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeletingTaller(taller);
-                          setError('');
-                          setSuccess('');
-                        }}
-                        className="btn btn-danger"
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }}
-                        title="Eliminar Taller"
-                      >
-                        <Trash2 size={14} />
-                        <span>Eliminar</span>
-                      </button>
+                      {taller.is_active === false ? (
+                        <button onClick={() => handleRestore(taller)} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }} title="Restaurar Taller">
+                          <RotateCcw size={14} />
+                          <span>Restaurar</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEditClick(taller)}
+                            className="btn btn-primary"
+                            style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }}
+                            title="Editar Taller"
+                          >
+                            <Edit size={14} />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeletingTaller(taller);
+                              setError('');
+                              setSuccess('');
+                            }}
+                            className="btn btn-danger"
+                            style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }}
+                            title="Eliminar Taller"
+                          >
+                            <Trash2 size={14} />
+                            <span>Eliminar</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -276,12 +311,23 @@ export default function GestionTalleres() {
         </div>
       )}
 
+      {!loading && filteredTalleres.length > PAGE_SIZE && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '18px' }}>
+          <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '8px 12px' }} onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
+            <ChevronLeft size={16} /> Anterior
+          </button>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Página {page} de {totalPages}</span>
+          <button type="button" className="btn btn-secondary" style={{ width: 'auto', padding: '8px 12px' }} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages}>
+            Siguiente <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Edit Workshop Modal */}
       {editingTaller && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '580px', background: '#ffffff', padding: '24px', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', maxHeight: '90vh', overflowY: 'auto' }}>
+        <Modal onClose={() => !editLoading && setEditingTaller(null)} labelledBy="edit-taller-title" maxWidth="580px">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>Editar Taller</h3>
+              <h3 id="edit-taller-title" style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>Editar Taller</h3>
               <button onClick={() => setEditingTaller(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
                 <X size={20} />
               </button>
@@ -419,14 +465,12 @@ export default function GestionTalleres() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete Workshop Modal */}
       {deletingTaller && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" role="dialog" aria-modal="true" aria-labelledby="delete-taller-title" style={{ width: '100%', maxWidth: '460px', background: '#ffffff', padding: '24px', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+        <Modal onClose={() => !deleteLoading && setDeletingTaller(null)} labelledBy="delete-taller-title" maxWidth="460px">
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '18px' }}>
               <div style={{ width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', background: '#fef2f2' }}>
                 <AlertTriangle size={22} />
@@ -436,7 +480,7 @@ export default function GestionTalleres() {
                   ¿Eliminar este taller?
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                  Se eliminará permanentemente <strong style={{ color: 'var(--text-main)' }}>{deletingTaller.nombre}</strong>, junto con sus visitas, fotografías y programaciones. También desaparecerá del mapa.
+                  <strong style={{ color: 'var(--text-main)' }}>{deletingTaller.nombre}</strong> desaparecerá del sistema y del mapa. Sus visitas, fotografías y programaciones se conservarán para auditoría y podrá restaurarse después.
                 </p>
               </div>
             </div>
@@ -468,17 +512,16 @@ export default function GestionTalleres() {
                 <span>{deleteLoading ? 'Eliminando...' : 'Sí, eliminar'}</span>
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* History Modal */}
       {historyTaller && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '650px', background: '#ffffff', padding: '24px', borderRadius: '12px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <Modal onClose={() => setHistoryTaller(null)} labelledBy="history-taller-title" maxWidth="650px">
+          <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 'calc(90vh - 48px)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>Historial de Visitas</h3>
+                <h3 id="history-taller-title" style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>Historial de Visitas</h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>Taller: {historyTaller.nombre}</p>
               </div>
               <button onClick={() => setHistoryTaller(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
@@ -598,7 +641,7 @@ export default function GestionTalleres() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

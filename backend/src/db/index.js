@@ -2,6 +2,7 @@ const { Pool, Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const { validatePassword } = require('../utils/validation');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -106,32 +107,39 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       await dbClient.query(schemaSql);
       console.log("Schema tables created successfully.");
 
-      // Step 3: Seed initial users
-      console.log("Seeding initial users...");
+      // Step 3: Seed the initial administrator from environment configuration.
+      console.log("Seeding initial administrator...");
       const salt = await bcrypt.genSalt(10);
-      
-      const adminHash = await bcrypt.hash('admin123', salt);
-      const vendedorHash = await bcrypt.hash('vendedor123', salt);
+
+      const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD || (isProduction ? '' : 'Admin12345');
+      const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@tallervisitas.com';
+      const initialAdminUsername = process.env.INITIAL_ADMIN_USERNAME || 'admin';
+      const passwordError = validatePassword(initialAdminPassword);
+
+      if (passwordError) {
+        throw new Error(`INITIAL_ADMIN_PASSWORD inválida: ${passwordError}`);
+      }
+
+      const adminHash = await bcrypt.hash(initialAdminPassword, salt);
 
       // Seed Administrator
       await dbClient.query(`
         INSERT INTO users (name, email, username, password_hash, role) 
         VALUES ($1, $2, $3, $4, $5)
-      `, ['Administrador', 'admin@tallervisitas.com', 'admin', adminHash, 'ADMIN']);
+      `, ['Administrador', initialAdminEmail, initialAdminUsername, adminHash, 'ADMIN']);
 
-      // Seed Vendor 1 (Juan)
-      await dbClient.query(`
-        INSERT INTO users (name, email, username, password_hash, role) 
-        VALUES ($1, $2, $3, $4, $5)
-      `, ['Juan Pérez', 'juan@tallervisitas.com', 'juan', vendedorHash, 'VENDEDOR']);
+      if (process.env.SEED_DEMO_USERS === 'true' || !isProduction) {
+        const vendedorHash = await bcrypt.hash('Vendedor123', salt);
+        await dbClient.query(`
+          INSERT INTO users (name, email, username, password_hash, role)
+          VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)
+        `, [
+          'Juan Pérez', 'juan@tallervisitas.com', 'juan', vendedorHash, 'VENDEDOR',
+          'María Andrade', 'maria@tallervisitas.com', 'maria', vendedorHash, 'VENDEDOR'
+        ]);
+      }
 
-      // Seed Vendor 2 (María)
-      await dbClient.query(`
-        INSERT INTO users (name, email, username, password_hash, role) 
-        VALUES ($1, $2, $3, $4, $5)
-      `, ['María Andrade', 'maria@tallervisitas.com', 'maria', vendedorHash, 'VENDEDOR']);
-
-      console.log("Initial users seeded successfully.");
+      console.log("Initial users seeded successfully. Change the initial password after first login.");
     } else {
       console.log("Tables already exist. Skipping schema setup and seeding.");
     }
@@ -176,7 +184,31 @@ async function initializeSchema(dbClient, shouldConnect = false) {
     `);
     console.log("Workshop detailed info columns verified.");
 
-    // Step 8: Ensure visit observations and weekly scheduling exist
+    // Step 8: Ensure recoverable workshop deletion and audit logging exist
+    console.log("Ensuring workshop lifecycle and audit tables exist...");
+    await dbClient.query(`
+      ALTER TABLE talleres
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(100) NOT NULL,
+        entity_type VARCHAR(100) NOT NULL,
+        entity_id VARCHAR(100),
+        details JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_talleres_is_active ON talleres(is_active);
+    `);
+    console.log("Workshop lifecycle and audit tables verified.");
+
+    // Step 9: Ensure visit observations and weekly scheduling exist
     console.log("Ensuring visit scheduling tables and columns exist...");
     await dbClient.query(`
       ALTER TABLE visitas
