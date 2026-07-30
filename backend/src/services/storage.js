@@ -2,8 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 
-// Configure local storage path. In Render, set UPLOAD_DIR to the persistent disk mount path.
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+// Prefer an explicitly configured path. Railway exposes its mounted volume path
+// automatically, so new uploads remain available after container replacements.
+const uploadDir = process.env.UPLOAD_DIR
+  || (process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'uploads')
+    : path.join(__dirname, '../../uploads'));
 
 // Ensure the upload directory exists
 if (!fs.existsSync(uploadDir)) {
@@ -81,5 +85,6 @@ const storageService = {
 
 module.exports = {
   upload,
-  storageService
+  storageService,
+  uploadDir
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api, API_BASE_URL } from '../api/api';
+import { api } from '../api/api';
+import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
 import AlertBanner from '../components/AlertBanner';
@@ -558,9 +559,10 @@ export default function GestionTalleres() {
                       {/* Image Thumbnail */}
                       <div style={{ width: '80px', height: '80px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, background: '#000' }}>
                         <img 
-                          src={`${API_BASE_URL}${v.foto_url}`} 
+                          src={getPhotoUrl(v.foto_url)}
                           alt="Visita" 
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={handlePhotoError}
                         />
                       </div>
 

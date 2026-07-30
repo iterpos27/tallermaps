@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { PlusCircle, ClipboardList, MapPin, Calendar, ArrowRight, CalendarDays, FileText } from 'lucide-react';
-import { api, getUser, API_BASE_URL } from '../api/api';
+import { api, getUser } from '../api/api';
+import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 
 export default function DashboardVendedor() {
   const user = getUser();
@@ -139,12 +140,10 @@ export default function DashboardVendedor() {
                   <div key={visita.id} className="visit-card glass-panel">
                     <div className="visit-img-container">
                       <img
-                        src={`${API_BASE_URL}${visita.foto_url}`}
+                        src={getPhotoUrl(visita.foto_url)}
                         alt={visita.taller_nombre}
                         className="visit-img"
-                        onError={(e) => {
-                          e.target.src = 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=400&auto=format&fit=crop';
-                        }}
+                        onError={handlePhotoError}
                       />
                     </div>
                     <div className="visit-body">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Calendar, MapPin, ExternalLink, Users, ClipboardList, Shield, X, Map, AlertTriangle, CheckCircle, User } from 'lucide-react';
-import { api, API_BASE_URL } from '../api/api';
+import { api } from '../api/api';
+import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 
 export default function DashboardAdmin() {
   const navigate = useNavigate();
@@ -410,12 +411,10 @@ export default function DashboardAdmin() {
                 onClick={() => setSelectedVisita(visita)}
               >
                 <img
-                  src={`${API_BASE_URL}${visita.foto_url}`}
+                  src={getPhotoUrl(visita.foto_url)}
                   alt={visita.taller_nombre}
                   className="visit-img"
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=400&auto=format&fit=crop';
-                  }}
+                  onError={handlePhotoError}
                 />
                 <span className="visit-badge-role">{visita.vendedor_nombre}</span>
               </div>
@@ -594,8 +593,9 @@ export default function DashboardAdmin() {
               {/* Image */}
               <div style={{ width: '100%', aspectRatio: '16/10', overflow: 'hidden', background: '#000' }}>
                 <img 
-                  src={`${API_BASE_URL}${selectedVisita.foto_url}`} 
-                  alt={selectedVisita.taller_nombre} 
+                  src={getPhotoUrl(selectedVisita.foto_url)}
+                  alt={selectedVisita.taller_nombre}
+                  onError={handlePhotoError}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               </div>
