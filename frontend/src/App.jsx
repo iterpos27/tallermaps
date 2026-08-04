@@ -18,6 +18,8 @@ import GestionTalleres from './pages/GestionTalleres';
 import ProgramacionAdmin from './pages/ProgramacionAdmin';
 import ActividadAdmin from './pages/ActividadAdmin';
 import VisitasOffline from './pages/VisitasOffline';
+import EntregasMensajero from './pages/EntregasMensajero';
+import ControlEntregas from './pages/ControlEntregas';
 
 /**
  * Route Guard for authenticated users
@@ -46,6 +48,9 @@ function CentralDashboard() {
   
   if (user?.role === 'ADMIN') {
     return <DashboardAdmin />;
+  }
+  if (user?.role === 'MENSAJERO') {
+    return <EntregasMensajero />;
   }
   
   return <DashboardVendedor />;
@@ -113,6 +118,24 @@ export default function App() {
         />
 
         {/* Admin-Only Routes */}
+        <Route
+          path="/entregas"
+          element={
+            <ProtectedRoute allowedRoles={['MENSAJERO']}>
+              <DashboardLayout><EntregasMensajero /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/control-entregas"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <DashboardLayout><ControlEntregas /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/programacion"
           element={

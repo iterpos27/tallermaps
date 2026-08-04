@@ -227,6 +227,21 @@ export const api = {
   audit: {
     list: ({ page = 1, limit = 25 } = {}) =>
       makeRequest(`/audit?page=${page}&limit=${limit}`, { method: 'GET' })
+  },
+
+  entregas: {
+    position: ({ latitud, longitud, accuracy }) =>
+      makeRequest('/entregas/position', {
+        method: 'POST',
+        body: JSON.stringify({ latitud, longitud, accuracy })
+      }),
+    complete: ({ latitud, longitud, accuracy }) =>
+      makeRequest('/entregas/complete', {
+        method: 'POST',
+        body: JSON.stringify({ latitud, longitud, accuracy })
+      }),
+    status: () => makeRequest('/entregas/status', { method: 'GET' }),
+    list: () => makeRequest('/entregas', { method: 'GET' })
   }
 };
 

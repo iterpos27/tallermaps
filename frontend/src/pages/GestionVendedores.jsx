@@ -405,6 +405,7 @@ export default function GestionVendedores() {
                   required
                 >
                   <option value="VENDEDOR">VENDEDOR (Acceso móvil, registra visitas)</option>
+                  <option value="MENSAJERO">MENSAJERO (Control de entregas por GPS)</option>
                   <option value="ADMIN">ADMINISTRADOR (Acceso total)</option>
                 </select>
               </div>
@@ -498,6 +499,7 @@ export default function GestionVendedores() {
                   required
                 >
                   <option value="VENDEDOR">VENDEDOR (Acceso móvil, registra visitas)</option>
+                  <option value="MENSAJERO">MENSAJERO (Control de entregas por GPS)</option>
                   <option value="ADMIN">ADMINISTRADOR (Acceso total)</option>
                 </select>
               </div>

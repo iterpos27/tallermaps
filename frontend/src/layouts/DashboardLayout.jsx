@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, Car, Wrench, CalendarDays, Activity, CloudOff } from 'lucide-react';
+import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, Car, Wrench, CalendarDays, Activity, CloudOff, Truck } from 'lucide-react';
 import { getUser, clearSession, offlineStorage } from '../api/api';
+import MessengerTracker from '../components/MessengerTracker';
 
 export default function DashboardLayout({ children }) {
   const user = getUser();
@@ -60,6 +61,7 @@ export default function DashboardLayout({ children }) {
     { to: '/vendedores', label: 'Vendedores', icon: Users },
     { to: '/talleres', label: 'Talleres', icon: Wrench },
     { to: '/actividad', label: 'Actividad', icon: Activity },
+    { to: '/control-entregas', label: 'Entregas', icon: Truck },
   ];
 
   const vendedorLinks = [
@@ -70,7 +72,11 @@ export default function DashboardLayout({ children }) {
     { to: '/visitas-offline', label: 'Pendientes Offline', icon: CloudOff },
   ];
 
-  const activeLinks = isAdmin ? adminLinks : vendedorLinks;
+  const mensajeroLinks = [
+    { to: '/dashboard', label: 'Entrega', icon: Truck },
+  ];
+
+  const activeLinks = isAdmin ? adminLinks : (user.role === 'MENSAJERO' ? mensajeroLinks : vendedorLinks);
 
   const initials = user.name
     ? user.name
@@ -144,6 +150,7 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content Area */}
       <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        {user.role === 'MENSAJERO' && <MessengerTracker />}
         {syncStatus && (
           <div 
             className="alert alert-success" 

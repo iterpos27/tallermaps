@@ -185,6 +185,16 @@ Puede configurar `BACKUP_DIR` y `PG_DUMP_PATH`. En producción, programe este co
 - La cola registra reintentos y conserva los conflictos para revisión sin perder datos.
 - El mapa agrupa talleres automáticamente según el nivel de zoom y permite buscarlos por nombre.
 
+## Control de entregas por geocerca
+
+- El administrador puede crear usuarios con rol `MENSAJERO` y configurar puntos internos como `MATRIZ`, `LOCAL` o `ALMACEN` con un radio entre 20 y 1000 metros. Los talleres los registra normalmente el vendedor y, como alternativa, el mensajero al confirmar una entrega en un destino nuevo.
+- El mensajero debe abrir la web dentro de Matriz/local/almacén y mantenerla abierta mientras sale. El servidor inicia el recorrido al detectar la primera posición fuera de la geocerca.
+- Al llegar, el mensajero abre la web y pulsa **Entrega realizada**. El backend selecciona el destino activo más cercano, valida su geocerca y calcula el tiempo entre salida y llegada.
+- El administrador consulta los recorridos, tiempos y estados desde **Entregas**.
+- `MAX_GPS_ACCURACY_METERS` permite cambiar la precisión máxima aceptada al confirmar una entrega; el valor predeterminado es 150 metros.
+
+El navegador no registra ubicaciones cuando está cerrado. Para detectar la salida, la página debe seguir abierta al abandonar el punto de origen; una vez que el servidor confirma la salida, el recorrido permanece activo aunque luego se cierre la web.
+
 ## Próximas mejoras recomendadas
 
 - Migrar fotos a almacenamiento de objetos como Cloudflare R2 o S3 si el volumen crece.

@@ -21,6 +21,8 @@ const getTalleresMapa = async (req, res) => {
         t.latitud,
         t.longitud,
         t.created_at,
+        t.tipo,
+        t.radio_geocerca_metros,
         lv.foto_url,
         lv.fecha_visita,
         u.name as vendedor_nombre
