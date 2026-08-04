@@ -76,6 +76,7 @@ app.use('/api/mapa', require('./routes/mapaRoutes'));
 app.use('/api/programaciones', require('./routes/programacionRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 app.use('/api/monitoring', require('./routes/monitoringRoutes'));
+app.use('/api/entregas', require('./routes/entregaRoutes'));
 
 // Serve frontend static build files
 const frontendBuildPath = process.env.FRONTEND_DIST_DIR || path.resolve(__dirname, '../../frontend/dist');

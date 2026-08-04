@@ -7,7 +7,7 @@ CREATE TABLE users (
   email VARCHAR(255) UNIQUE NOT NULL,
   username VARCHAR(50) UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL CHECK (role IN ('ADMIN', 'VENDEDOR')),
+  role VARCHAR(50) NOT NULL CHECK (role IN ('ADMIN', 'VENDEDOR', 'MENSAJERO')),
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -23,6 +23,8 @@ CREATE TABLE talleres (
   direccion VARCHAR(255),
   correo VARCHAR(255),
   observaciones TEXT,
+  tipo VARCHAR(20) NOT NULL DEFAULT 'TALLER' CHECK (tipo IN ('TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN')),
+  radio_geocerca_metros INTEGER NOT NULL DEFAULT 100 CHECK (radio_geocerca_metros BETWEEN 20 AND 1000),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   deleted_at TIMESTAMP,
   deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -67,3 +69,34 @@ CREATE TABLE programaciones_visita (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (taller_id, vendedor_id, fecha_programada)
 );
+
+-- Automatic messenger route tracking. A route starts after leaving a known
+-- origin geofence and finishes when the messenger confirms inside a destination.
+CREATE TABLE messenger_tracking_state (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  inside_point_id INTEGER REFERENCES talleres(id) ON DELETE SET NULL,
+  last_latitud DOUBLE PRECISION,
+  last_longitud DOUBLE PRECISION,
+  last_accuracy_metros DOUBLE PRECISION,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE entregas_recorridos (
+  id BIGSERIAL PRIMARY KEY,
+  mensajero_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  origen_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE RESTRICT,
+  destino_id INTEGER REFERENCES talleres(id) ON DELETE RESTRICT,
+  estado VARCHAR(20) NOT NULL DEFAULT 'EN_RUTA' CHECK (estado IN ('EN_RUTA', 'ENTREGADA', 'CANCELADA')),
+  salida_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  llegada_at TIMESTAMP,
+  salida_latitud DOUBLE PRECISION NOT NULL,
+  salida_longitud DOUBLE PRECISION NOT NULL,
+  llegada_latitud DOUBLE PRECISION,
+  llegada_longitud DOUBLE PRECISION,
+  distancia_destino_metros DOUBLE PRECISION,
+  precision_llegada_metros DOUBLE PRECISION,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_entregas_un_recorrido_activo
+  ON entregas_recorridos(mensajero_id) WHERE estado = 'EN_RUTA';

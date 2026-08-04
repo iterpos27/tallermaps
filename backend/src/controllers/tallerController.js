@@ -27,6 +27,8 @@ const getTalleres = async (req, res) => {
         t.direccion,
         t.correo,
         t.observaciones,
+        t.tipo,
+        t.radio_geocerca_metros,
         t.is_active,
         t.deleted_at,
         t.created_at,
@@ -54,7 +56,8 @@ const getTallerById = async (req, res) => {
   const { id } = req.params;
   try {
     const result = await db.query(
-      `SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, is_active, deleted_at, created_at
+      `SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones,
+              tipo, radio_geocerca_metros, is_active, deleted_at, created_at
        FROM talleres
        WHERE id = $1 AND (is_active = TRUE OR $2 = 'ADMIN')`,
       [id, req.user.role]
@@ -77,32 +80,37 @@ const getTallerById = async (req, res) => {
  * Create a new workshop
  */
 const createTaller = async (req, res) => {
-  const { nombre, latitud, longitud } = req.body;
+  const { nombre, latitud, longitud, tipo, radio_geocerca_metros } = req.body;
+  const normalizedType = req.user.role === 'ADMIN' ? String(tipo || 'TALLER').toUpperCase() : 'TALLER';
+  const geofenceRadius = req.user.role === 'ADMIN' ? Number(radio_geocerca_metros || 100) : 100;
 
   if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
-    return res.status(400).json({ 
-      error: 'Ingrese un nombre y coordenadas GPS válidas.'
-    });
+    return res.status(400).json({ error: 'Ingrese un nombre y coordenadas GPS válidas.' });
+  }
+  if (!['TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN'].includes(normalizedType)) {
+    return res.status(400).json({ error: 'El tipo de punto no es válido.' });
+  }
+  if (req.user.role === 'ADMIN' && normalizedType === 'TALLER') {
+    return res.status(403).json({ error: 'Los talleres deben ser registrados por un vendedor o mensajero.' });
+  }
+  if (!Number.isInteger(geofenceRadius) || geofenceRadius < 20 || geofenceRadius > 1000) {
+    return res.status(400).json({ error: 'El radio de geocerca debe estar entre 20 y 1000 metros.' });
   }
 
   try {
-    // Check if workshop name already exists (case-insensitive)
     const existingResult = await db.query(
       'SELECT id FROM talleres WHERE LOWER(nombre) = LOWER($1)',
       [nombre.trim()]
     );
-
     if (existingResult.rows.length > 0) {
-      return res.status(400).json({ 
-        error: 'Ya existe un taller registrado con ese nombre.' 
-      });
+      return res.status(400).json({ error: 'Ya existe un taller registrado con ese nombre.' });
     }
 
     const result = await db.query(
-      `INSERT INTO talleres (nombre, latitud, longitud) 
-       VALUES ($1, $2, $3) 
-       RETURNING id, nombre, latitud, longitud, created_at`,
-      [nombre.trim(), latitud, longitud]
+      `INSERT INTO talleres (nombre, latitud, longitud, tipo, radio_geocerca_metros)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, nombre, latitud, longitud, tipo, radio_geocerca_metros, created_at`,
+      [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius]
     );
 
     await safeLogActivity({
@@ -110,18 +118,13 @@ const createTaller = async (req, res) => {
       action: 'TALLER_CREADO',
       entityType: 'taller',
       entityId: result.rows[0].id,
-      details: { nombre: result.rows[0].nombre }
+      details: { nombre: result.rows[0].nombre, tipo: result.rows[0].tipo }
     });
 
-    return res.status(201).json({
-      message: 'Taller registrado exitosamente.',
-      taller: result.rows[0]
-    });
+    return res.status(201).json({ message: 'Punto registrado exitosamente.', taller: result.rows[0] });
   } catch (error) {
     console.error('Error creating taller:', error);
-    return res.status(500).json({ 
-      error: 'Error al registrar el taller.' 
-    });
+    return res.status(500).json({ error: 'Error al registrar el punto.' });
   }
 };
 
@@ -130,7 +133,9 @@ const createTaller = async (req, res) => {
  */
 const updateTaller = async (req, res) => {
   const { id } = req.params;
-  const { nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones } = req.body;
+  const { nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, tipo, radio_geocerca_metros } = req.body;
+  const normalizedType = String(tipo || 'TALLER').toUpperCase();
+  const geofenceRadius = Number(radio_geocerca_metros || 100);
 
   if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     return res.status(400).json({ 
@@ -140,6 +145,13 @@ const updateTaller = async (req, res) => {
 
   if (correo && !isValidEmail(correo)) {
     return res.status(400).json({ error: 'Ingrese un correo electrónico válido.' });
+  }
+
+  if (!['TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN'].includes(normalizedType)) {
+    return res.status(400).json({ error: 'El tipo de punto no es valido.' });
+  }
+  if (!Number.isInteger(geofenceRadius) || geofenceRadius < 20 || geofenceRadius > 1000) {
+    return res.status(400).json({ error: 'El radio de geocerca debe estar entre 20 y 1000 metros.' });
   }
 
   try {
@@ -162,9 +174,11 @@ const updateTaller = async (req, res) => {
 
     const result = await db.query(
       `UPDATE talleres 
-       SET nombre = $1, latitud = $2, longitud = $3, propietario = $4, telefono = $5, direccion = $6, correo = $7, observaciones = $8
-       WHERE id = $9 
-       RETURNING id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, created_at`,
+       SET nombre = $1, latitud = $2, longitud = $3, propietario = $4, telefono = $5,
+           direccion = $6, correo = $7, observaciones = $8, tipo = $9, radio_geocerca_metros = $10
+       WHERE id = $11
+       RETURNING id, nombre, latitud, longitud, propietario, telefono, direccion, correo,
+                 observaciones, tipo, radio_geocerca_metros, created_at`,
       [
         nombre.trim(), 
         latitud, 
@@ -173,7 +187,9 @@ const updateTaller = async (req, res) => {
         telefono ? telefono.trim() : null, 
         direccion ? direccion.trim() : null, 
         correo ? correo.trim() : null, 
-        observaciones ? observaciones.trim() : null, 
+        observaciones ? observaciones.trim() : null,
+        normalizedType,
+        geofenceRadius,
         id
       ]
     );
@@ -183,7 +199,11 @@ const updateTaller = async (req, res) => {
       action: 'TALLER_ACTUALIZADO',
       entityType: 'taller',
       entityId: result.rows[0].id,
-      details: { nombre: result.rows[0].nombre }
+      details: {
+        nombre: result.rows[0].nombre,
+        tipo: result.rows[0].tipo,
+        radio_geocerca_metros: result.rows[0].radio_geocerca_metros
+      }
     });
 
     return res.status(200).json({

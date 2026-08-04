@@ -49,9 +49,9 @@ const createUser = async (req, res) => {
   }
 
   const normalizedRole = role.toUpperCase();
-  if (normalizedRole !== 'ADMIN' && normalizedRole !== 'VENDEDOR') {
+  if (!['ADMIN', 'VENDEDOR', 'MENSAJERO'].includes(normalizedRole)) {
     return res.status(400).json({ 
-      error: 'El rol debe ser ADMIN o VENDEDOR.' 
+      error: 'El rol debe ser ADMIN, VENDEDOR o MENSAJERO.'
     });
   }
 
@@ -185,8 +185,8 @@ const updateUser = async (req, res) => {
   }
 
   const normalizedRole = role.toUpperCase();
-  if (!['ADMIN', 'VENDEDOR'].includes(normalizedRole)) {
-    return res.status(400).json({ error: 'El rol debe ser ADMIN o VENDEDOR.' });
+  if (!['ADMIN', 'VENDEDOR', 'MENSAJERO'].includes(normalizedRole)) {
+    return res.status(400).json({ error: 'El rol debe ser ADMIN, VENDEDOR o MENSAJERO.' });
   }
 
   try {

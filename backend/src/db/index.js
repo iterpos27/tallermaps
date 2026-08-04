@@ -247,6 +247,57 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       END $$;
     `);
     console.log("Visit scheduling verified.");
+
+    // Step 10: Enable messenger roles, delivery points and automatic route timing.
+    console.log("Ensuring messenger delivery tracking exists...");
+    await dbClient.query(`
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('ADMIN', 'VENDEDOR', 'MENSAJERO'));
+
+      ALTER TABLE talleres
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'TALLER',
+      ADD COLUMN IF NOT EXISTS radio_geocerca_metros INTEGER NOT NULL DEFAULT 100;
+
+      ALTER TABLE talleres DROP CONSTRAINT IF EXISTS talleres_tipo_check;
+      ALTER TABLE talleres ADD CONSTRAINT talleres_tipo_check
+        CHECK (tipo IN ('TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN'));
+      ALTER TABLE talleres DROP CONSTRAINT IF EXISTS talleres_radio_geocerca_metros_check;
+      ALTER TABLE talleres ADD CONSTRAINT talleres_radio_geocerca_metros_check
+        CHECK (radio_geocerca_metros BETWEEN 20 AND 1000);
+
+      CREATE TABLE IF NOT EXISTS messenger_tracking_state (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        inside_point_id INTEGER REFERENCES talleres(id) ON DELETE SET NULL,
+        last_latitud DOUBLE PRECISION,
+        last_longitud DOUBLE PRECISION,
+        last_accuracy_metros DOUBLE PRECISION,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS entregas_recorridos (
+        id BIGSERIAL PRIMARY KEY,
+        mensajero_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        origen_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE RESTRICT,
+        destino_id INTEGER REFERENCES talleres(id) ON DELETE RESTRICT,
+        estado VARCHAR(20) NOT NULL DEFAULT 'EN_RUTA'
+          CHECK (estado IN ('EN_RUTA', 'ENTREGADA', 'CANCELADA')),
+        salida_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        llegada_at TIMESTAMP,
+        salida_latitud DOUBLE PRECISION NOT NULL,
+        salida_longitud DOUBLE PRECISION NOT NULL,
+        llegada_latitud DOUBLE PRECISION,
+        llegada_longitud DOUBLE PRECISION,
+        distancia_destino_metros DOUBLE PRECISION,
+        precision_llegada_metros DOUBLE PRECISION,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_entregas_un_recorrido_activo
+        ON entregas_recorridos(mensajero_id) WHERE estado = 'EN_RUTA';
+      CREATE INDEX IF NOT EXISTS idx_entregas_salida_at ON entregas_recorridos(salida_at DESC);
+    `);
+    console.log("Messenger delivery tracking verified.");
   } catch (error) {
     console.error("Error setting up database tables:", error);
     throw error;
