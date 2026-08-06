@@ -15,6 +15,7 @@ import MisVisitas from './pages/MisVisitas';
 import MapaTalleres from './pages/MapaTalleres';
 import GestionVendedores from './pages/GestionVendedores';
 import GestionTalleres from './pages/GestionTalleres';
+import GestionAlmacenes from './pages/GestionAlmacenes';
 import ProgramacionAdmin from './pages/ProgramacionAdmin';
 import ActividadAdmin from './pages/ActividadAdmin';
 import VisitasOffline from './pages/VisitasOffline';
@@ -173,6 +174,17 @@ export default function App() {
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <DashboardLayout>
                 <GestionTalleres />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/almacenes"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <DashboardLayout>
+                <GestionAlmacenes />
               </DashboardLayout>
             </ProtectedRoute>
           }

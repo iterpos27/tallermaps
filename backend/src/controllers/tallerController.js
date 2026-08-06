@@ -7,6 +7,7 @@ const { isNonEmptyString, isValidEmail, isValidLatitude, isValidLongitude } = re
  */
 const getTalleres = async (req, res) => {
   const includeDeleted = req.user?.role === 'ADMIN' && req.query.include_deleted === 'true';
+  const isCompanyPointRequest = req.user?.role === 'ADMIN' && req.query.tipo === 'EMPRESA';
   try {
     const result = await db.query(`
       WITH latest_visitas AS (
@@ -38,8 +39,12 @@ const getTalleres = async (req, res) => {
       LEFT JOIN latest_visitas lv ON lv.taller_id = t.id
       LEFT JOIN users u ON u.id = lv.vendedor_id
       WHERE ($1::boolean = TRUE OR t.is_active = TRUE)
+        AND (
+          ($2::boolean = TRUE AND t.tipo IN ('MATRIZ', 'LOCAL', 'ALMACEN'))
+          OR ($2::boolean = FALSE AND t.tipo = 'TALLER')
+        )
       ORDER BY t.nombre ASC
-    `, [includeDeleted]);
+    `, [includeDeleted, isCompanyPointRequest]);
     return res.status(200).json(result.rows);
   } catch (error) {
     console.error('Error fetching talleres:', error);
