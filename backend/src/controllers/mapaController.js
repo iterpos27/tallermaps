@@ -21,6 +21,9 @@ const getTalleresMapa = async (req, res) => {
         t.latitud,
         t.longitud,
         t.created_at,
+        t.sector,
+        t.vendedor_asignado_id,
+        assigned_user.name AS vendedor_asignado_nombre,
         t.tipo,
         t.radio_geocerca_metros,
         lv.foto_url,
@@ -29,6 +32,7 @@ const getTalleresMapa = async (req, res) => {
       FROM talleres t
       LEFT JOIN latest_visitas lv ON t.id = lv.taller_id
       LEFT JOIN users u ON lv.vendedor_id = u.id
+      LEFT JOIN users assigned_user ON assigned_user.id = t.vendedor_asignado_id
       WHERE t.is_active = TRUE AND t.tipo = 'TALLER'
       ORDER BY t.nombre ASC;
     `;

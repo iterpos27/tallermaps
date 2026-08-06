@@ -176,6 +176,11 @@ export const api = {
     },
     get: (id) => 
       makeRequest(`/visitas/${id}`, { method: 'GET' }),
+    updateDateTime: (id, data) =>
+      makeRequest(`/visitas/${id}/fecha`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
     delete: (id) =>
       makeRequest(`/visitas/${id}`, { method: 'DELETE' }),
     create: (formData) => {

@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { api, offlineStorage } from '../api/api';
 import { compressImage } from '../utils/image';
 
 export default function RegistrarVisita() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   // Form states
   const [tallerMode, setTallerMode] = useState('existente'); // 'existente' | 'nuevo'
   const [talleres, setTalleres] = useState([]);
   const [programaciones, setProgramaciones] = useState([]);
   const [selectedProgramacionId, setSelectedProgramacionId] = useState('');
-  const [selectedTallerId, setSelectedTallerId] = useState('');
+  const [selectedTallerId, setSelectedTallerId] = useState(() => searchParams.get('taller_id') || '');
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
   const [observacion, setObservacion] = useState('');
   const [suggestions, setSuggestions] = useState([]);

@@ -1,20 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { ClipboardList, Search, Calendar, MapPin, ExternalLink, X, FileText } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, ClipboardList, Edit3, Play, Search, Trash2 } from 'lucide-react';
 import { api } from '../api/api';
-import { getPhotoUrl, handlePhotoError } from '../utils/photo';
+import AlertBanner from '../components/AlertBanner';
+import Modal from '../components/Modal';
+
+const pad = (value) => String(value).padStart(2, '0');
+
+const splitLocalDateTime = (value) => {
+  const date = new Date(value);
+  return {
+    fecha: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    hora: `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  };
+};
 
 export default function MisVisitas() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [visitas, setVisitas] = useState([]);
   const [error, setError] = useState('');
-  
-  // Filter states
+  const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  
-  // Selected photo modal
-  const [activePhoto, setActivePhoto] = useState(null);
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [deletingVisit, setDeletingVisit] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchVisitas = async () => {
     setLoading(true);
@@ -25,20 +39,16 @@ export default function MisVisitas() {
         fecha_fin: fechaFin
       });
       setVisitas(data);
-    } catch {
-      setError('Error al cargar sus visitas.');
+    } catch (requestError) {
+      setError(requestError.message || 'Error al cargar sus visitas.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Debounced search on search term change
-    const delayDebounceFn = setTimeout(() => {
-      fetchVisitas();
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
+    const delay = setTimeout(fetchVisitas, 300);
+    return () => clearTimeout(delay);
   }, [searchTerm, fechaInicio, fechaFin]);
 
   const handleResetFilters = () => {
@@ -47,181 +57,180 @@ export default function MisVisitas() {
     setFechaFin('');
   };
 
+  const handlePerformVisit = (visita) => {
+    navigate(`/registrar-visita?taller_id=${visita.taller_id}`);
+  };
+
+  const openEditModal = (visita) => {
+    const dateTime = splitLocalDateTime(visita.fecha_visita);
+    setEditingVisit(visita);
+    setEditDate(dateTime.fecha);
+    setEditTime(dateTime.hora);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+    if (!editingVisit || !editDate || !editTime) return;
+
+    setActionLoading(true);
+    setError('');
+    try {
+      await api.visitas.updateDateTime(editingVisit.id, { fecha: editDate, hora: editTime });
+      setEditingVisit(null);
+      setSuccess('Fecha y hora de la visita actualizadas correctamente.');
+      await fetchVisitas();
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo actualizar la visita.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingVisit) return;
+
+    setActionLoading(true);
+    setError('');
+    try {
+      await api.visitas.delete(deletingVisit.id);
+      setVisitas((current) => current.filter((visita) => visita.id !== deletingVisit.id));
+      setSuccess(`La visita a ${deletingVisit.taller_nombre} fue eliminada.`);
+      setDeletingVisit(null);
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo eliminar la visita.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Mis Visitas Registradas</h1>
-          <p className="page-subtitle">Consulte su historial de visitas en campo</p>
+          <h1 className="page-title">Mis visitas</h1>
+          <p className="page-subtitle">Consulte y administre sus visitas realizadas</p>
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-danger" style={{ marginBottom: '20px' }}>
-          <span>{error}</span>
-        </div>
-      )}
+      <AlertBanner type="success" style={{ marginBottom: '20px' }}>{success}</AlertBanner>
+      <AlertBanner style={{ marginBottom: '20px' }}>{!editingVisit && !deletingVisit ? error : ''}</AlertBanner>
 
-      {/* Filters Bar */}
       <div className="filter-bar glass-panel">
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Buscar Taller</label>
+          <label className="form-label">Buscar taller</label>
           <div className="input-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Nombre del taller..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '40px' }}
-            />
+            <input type="text" className="form-input" placeholder="Nombre del taller..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} style={{ paddingLeft: '40px' }} />
             <Search size={18} style={{ position: 'absolute', left: '14px', color: 'var(--text-muted)' }} />
           </div>
         </div>
-
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Desde</label>
-          <input
-            type="date"
-            className="form-input"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-          />
+          <input type="date" className="form-input" value={fechaInicio} onChange={(event) => setFechaInicio(event.target.value)} />
         </div>
-
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Hasta</label>
-          <input
-            type="date"
-            className="form-input"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-          />
+          <input type="date" className="form-input" value={fechaFin} onChange={(event) => setFechaFin(event.target.value)} />
         </div>
-
-        <button 
-          onClick={handleResetFilters} 
-          className="btn btn-secondary" 
-          style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <span>Limpiar</span>
-        </button>
+        <button type="button" onClick={handleResetFilters} className="btn btn-secondary" style={{ height: '50px' }}>Limpiar</button>
       </div>
 
-      {/* Visits List */}
       {loading ? (
-        <div className="loading-overlay">
-          <div className="spinner"></div>
-          <p>Cargando visitas...</p>
-        </div>
+        <div className="loading-overlay"><div className="spinner"></div><p>Cargando visitas...</p></div>
       ) : visitas.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-          <ClipboardList size={56} style={{ marginBottom: '16px', opacity: '0.4' }} />
+          <ClipboardList size={56} style={{ marginBottom: '16px', opacity: 0.4 }} />
           <h3>No se encontraron visitas</h3>
-          <p style={{ marginTop: '8px' }}>Intente cambiar los filtros o registre una nueva visita.</p>
+          <p style={{ marginTop: '8px' }}>Cambie los filtros o registre una nueva visita.</p>
         </div>
       ) : (
-        <div className="visits-grid">
-          {visitas.map((visita) => (
-            <div key={visita.id} className="visit-card glass-panel">
-              <div 
-                className="visit-img-container" 
-                style={{ cursor: 'pointer' }}
-                onClick={() => setActivePhoto(getPhotoUrl(visita.foto_url))}
-              >
-                <img
-                  src={getPhotoUrl(visita.foto_url)}
-                  alt={visita.taller_nombre}
-                  className="visit-img"
-                  onError={handlePhotoError}
-                />
-              </div>
-              <div className="visit-body">
-                <h3 className="visit-taller-name">{visita.taller_nombre}</h3>
-                
-                <div className="visit-detail-item">
-                  <Calendar size={16} />
-                  <span>{new Date(visita.fecha_visita).toLocaleString('es-EC')}</span>
-                </div>
-
-                <div className="visit-detail-item">
-                  <MapPin size={16} />
-                  <span style={{ fontSize: '0.82rem' }}>
-                    Lat: {parseFloat(visita.latitud).toFixed(6)}, Lng: {parseFloat(visita.longitud).toFixed(6)}
-                  </span>
-                </div>
-
-                {visita.observacion && (
-                  <div className="visit-detail-item" style={{ alignItems: 'flex-start' }}>
-                    <FileText size={16} />
-                    <span style={{ fontSize: '0.82rem' }}>{visita.observacion}</span>
-                  </div>
-                )}
-
-                <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${visita.latitud},${visita.longitud}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 12px', fontSize: '0.85rem', textDecoration: 'none' }}
-                  >
-                    <span>Ver en Google Maps</span>
-                    <ExternalLink size={14} />
-                  </a>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="glass-panel" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="premium-table visits-data-table">
+            <thead>
+              <tr>
+                <th>Taller</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visitas.map((visita) => {
+                const outsideGeofence = visita.fuera_rango === true;
+                return (
+                  <tr key={visita.id}>
+                    <td><strong>{visita.taller_nombre}</strong></td>
+                    <td>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', whiteSpace: 'nowrap' }}>
+                        <Calendar size={16} color="var(--primary)" />
+                        {new Date(visita.fecha_visita).toLocaleDateString('es-EC')}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`visit-status-badge ${outsideGeofence ? 'outside' : 'completed'}`}>
+                        {outsideGeofence ? 'FUERA DE GEOCERCA' : 'REALIZADA'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="visit-table-actions">
+                        <button type="button" className="btn btn-primary" onClick={() => handlePerformVisit(visita)} title="Realizar visita" aria-label={`Realizar visita en ${visita.taller_nombre}`}>
+                          <Play size={16} />
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={() => openEditModal(visita)} title="Editar fecha y hora" aria-label={`Editar visita a ${visita.taller_nombre}`}>
+                          <Edit3 size={16} />
+                        </button>
+                        <button type="button" className="btn btn-danger" onClick={() => { setDeletingVisit(visita); setError(''); setSuccess(''); }} title="Eliminar visita" aria-label={`Eliminar visita a ${visita.taller_nombre}`}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Image Modal Lightbox */}
-      {activePhoto && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-          onClick={() => setActivePhoto(null)}
-        >
-          <button
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              background: 'rgba(255,255,255,0.1)',
-              border: 'none',
-              color: '#fff',
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onClick={() => setActivePhoto(null)}
-          >
-            <X size={24} />
-          </button>
-          <img 
-            src={activePhoto} 
-            alt="Visita ampliada" 
-            style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}
-            onError={handlePhotoError}
-            onClick={(e) => e.stopPropagation()} 
-          />
-        </div>
+      {editingVisit && (
+        <Modal onClose={() => !actionLoading && setEditingVisit(null)} labelledBy="edit-visit-date-title" maxWidth="440px">
+          <h2 id="edit-visit-date-title" style={{ color: 'var(--primary)', fontSize: '1.15rem', marginBottom: '6px' }}>Editar fecha y hora</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginBottom: '18px' }}>{editingVisit.taller_nombre}</p>
+          <AlertBanner style={{ marginBottom: '16px' }}>{error}</AlertBanner>
+          <form onSubmit={handleEditSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">Fecha</label>
+                <input type="date" className="form-input" value={editDate} onChange={(event) => setEditDate(event.target.value)} required disabled={actionLoading} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Hora</label>
+                <input type="time" className="form-input" value={editTime} onChange={(event) => setEditTime(event.target.value)} required disabled={actionLoading} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => setEditingVisit(null)} disabled={actionLoading}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }} disabled={actionLoading}>{actionLoading ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {deletingVisit && (
+        <Modal onClose={() => !actionLoading && setDeletingVisit(null)} labelledBy="delete-visit-title" maxWidth="440px">
+          <h2 id="delete-visit-title" style={{ color: 'var(--danger)', fontSize: '1.15rem', marginBottom: '10px' }}>¿Eliminar visita?</h2>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '18px' }}>
+            Se eliminará la visita a <strong style={{ color: 'var(--text-dark)' }}>{deletingVisit.taller_nombre}</strong>. Si estaba vinculada a una programación, volverá a quedar pendiente.
+          </p>
+          <AlertBanner style={{ marginBottom: '16px' }}>{error}</AlertBanner>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => setDeletingVisit(null)} disabled={actionLoading}>Cancelar</button>
+            <button type="button" className="btn btn-danger" style={{ width: 'auto' }} onClick={handleDelete} disabled={actionLoading}>
+              <Trash2 size={16} />{actionLoading ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

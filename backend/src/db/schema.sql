@@ -23,6 +23,8 @@ CREATE TABLE talleres (
   direccion VARCHAR(255),
   correo VARCHAR(255),
   observaciones TEXT,
+  sector VARCHAR(100),
+  vendedor_asignado_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   tipo VARCHAR(20) NOT NULL DEFAULT 'TALLER' CHECK (tipo IN ('TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN')),
   radio_geocerca_metros INTEGER NOT NULL DEFAULT 100 CHECK (radio_geocerca_metros BETWEEN 20 AND 1000),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -62,12 +64,14 @@ CREATE TABLE programaciones_visita (
   taller_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE CASCADE,
   vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   fecha_programada DATE NOT NULL,
+  hora_programada TIME NOT NULL DEFAULT '08:00',
+  duracion_minutos INTEGER NOT NULL DEFAULT 30 CHECK (duracion_minutos BETWEEN 1 AND 30),
   observacion TEXT,
   estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EJECUTADA', 'CANCELADA')),
   visita_id INTEGER REFERENCES visitas(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (taller_id, vendedor_id, fecha_programada)
+  UNIQUE (taller_id, vendedor_id, fecha_programada, hora_programada)
 );
 
 -- Automatic messenger route tracking. A route starts after leaving a known

@@ -15,6 +15,7 @@ export default function GestionTalleres() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
+  const [vendedores, setVendedores] = useState([]);
 
   // Edit Modal States
   const [editingTaller, setEditingTaller] = useState(null);
@@ -26,6 +27,8 @@ export default function GestionTalleres() {
   const [editDireccion, setEditDireccion] = useState('');
   const [editCorreo, setEditCorreo] = useState('');
   const [editObservaciones, setEditObservaciones] = useState('');
+  const [editSector, setEditSector] = useState('');
+  const [editVendedorAsignado, setEditVendedorAsignado] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
   // History Modal States
@@ -53,6 +56,18 @@ export default function GestionTalleres() {
     fetchTalleres();
   }, [showArchived]);
 
+  useEffect(() => {
+    const fetchVendedores = async () => {
+      try {
+        const users = await api.users.list();
+        setVendedores(users.filter((user) => user.role === 'VENDEDOR' && user.is_active !== false));
+      } catch {
+        setError('No se pudo cargar la lista de vendedores.');
+      }
+    };
+    fetchVendedores();
+  }, []);
+
   const handleEditClick = (taller) => {
     setEditingTaller(taller);
     setEditNombre(taller.nombre);
@@ -63,6 +78,8 @@ export default function GestionTalleres() {
     setEditDireccion(taller.direccion || '');
     setEditCorreo(taller.correo || '');
     setEditObservaciones(taller.observaciones || '');
+    setEditSector(taller.sector || '');
+    setEditVendedorAsignado(taller.vendedor_asignado_id ? String(taller.vendedor_asignado_id) : '');
     setError('');
     setSuccess('');
   };
@@ -88,6 +105,8 @@ export default function GestionTalleres() {
         direccion: editDireccion.trim(),
         correo: editCorreo.trim(),
         observaciones: editObservaciones.trim(),
+        sector: editSector.trim(),
+        vendedor_asignado_id: editVendedorAsignado || null,
         tipo: 'TALLER',
         radio_geocerca_metros: Number(editingTaller.radio_geocerca_metros || 100)
       });
@@ -148,9 +167,12 @@ export default function GestionTalleres() {
     }
   };
 
-  const filteredTalleres = talleres.filter((t) =>
-    t.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearch = searchTerm.toLowerCase();
+  const filteredTalleres = talleres.filter((t) => (
+    t.nombre.toLowerCase().includes(normalizedSearch)
+    || (t.sector || '').toLowerCase().includes(normalizedSearch)
+    || (t.vendedor_asignado_nombre || '').toLowerCase().includes(normalizedSearch)
+  ));
   const totalPages = Math.max(1, Math.ceil(filteredTalleres.length / PAGE_SIZE));
   const paginatedTalleres = filteredTalleres.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -178,7 +200,7 @@ export default function GestionTalleres() {
             <input
               type="text"
               className="form-input"
-              placeholder="Escriba el nombre..."
+              placeholder="Nombre, sector o vendedor..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{ paddingLeft: '40px' }}
@@ -212,6 +234,7 @@ export default function GestionTalleres() {
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '16px' }}>Nombre del Taller</th>
+                <th style={{ padding: '16px' }}>Sector y responsable</th>
                 <th style={{ padding: '16px' }}>Ultimo Vendedor</th>
                 <th style={{ padding: '16px' }}>Coordenadas GPS</th>
                 <th style={{ padding: '16px' }}>Fecha Creación</th>
@@ -245,6 +268,12 @@ export default function GestionTalleres() {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <div style={{ fontWeight: 700, color: taller.sector ? 'var(--primary)' : 'var(--text-muted)', marginBottom: '4px' }}>
+                      {taller.sector || 'Sin sector'}
+                    </div>
+                    <div>{taller.vendedor_asignado_nombre || 'Sin vendedor asignado'}</div>
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     {taller.ultimo_vendedor_nombre ? (
@@ -420,6 +449,35 @@ export default function GestionTalleres() {
                   disabled={editLoading}
                   style={{ minHeight: '70px', resize: 'vertical' }}
                 />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Sector del mapa</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Ej. Norte, Centro, Valle"
+                    value={editSector}
+                    onChange={(event) => setEditSector(event.target.value)}
+                    disabled={editLoading}
+                    maxLength={100}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Vendedor responsable</label>
+                  <select
+                    className="form-input form-select"
+                    value={editVendedorAsignado}
+                    onChange={(event) => setEditVendedorAsignado(event.target.value)}
+                    disabled={editLoading}
+                  >
+                    <option value="">Sin asignar</option>
+                    {vendedores.map((vendedor) => (
+                      <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>

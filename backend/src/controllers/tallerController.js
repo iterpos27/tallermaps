@@ -2,6 +2,8 @@ const db = require('../db');
 const { logActivity, safeLogActivity } = require('../services/audit');
 const { isNonEmptyString, isValidEmail, isValidLatitude, isValidLongitude } = require('../utils/validation');
 
+const normalizeSector = (value) => isNonEmptyString(value) ? value.trim() : null;
+
 /**
  * List all workshops (talleres)
  */
@@ -28,6 +30,9 @@ const getTalleres = async (req, res) => {
         t.direccion,
         t.correo,
         t.observaciones,
+        t.sector,
+        t.vendedor_asignado_id,
+        assigned_user.name AS vendedor_asignado_nombre,
         t.tipo,
         t.radio_geocerca_metros,
         t.is_active,
@@ -38,6 +43,7 @@ const getTalleres = async (req, res) => {
       FROM talleres t
       LEFT JOIN latest_visitas lv ON lv.taller_id = t.id
       LEFT JOIN users u ON u.id = lv.vendedor_id
+      LEFT JOIN users assigned_user ON assigned_user.id = t.vendedor_asignado_id
       WHERE ($1::boolean = TRUE OR t.is_active = TRUE)
         AND (
           ($2::boolean = TRUE AND t.tipo IN ('MATRIZ', 'LOCAL', 'ALMACEN'))
@@ -61,10 +67,13 @@ const getTallerById = async (req, res) => {
   const { id } = req.params;
   try {
     const result = await db.query(
-      `SELECT id, nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones,
-              tipo, radio_geocerca_metros, is_active, deleted_at, created_at
-       FROM talleres
-       WHERE id = $1 AND (is_active = TRUE OR $2 = 'ADMIN')`,
+      `SELECT t.id, t.nombre, t.latitud, t.longitud, t.propietario, t.telefono, t.direccion, t.correo,
+              t.observaciones, t.sector, t.vendedor_asignado_id,
+              assigned_user.name AS vendedor_asignado_nombre,
+              t.tipo, t.radio_geocerca_metros, t.is_active, t.deleted_at, t.created_at
+       FROM talleres t
+       LEFT JOIN users assigned_user ON assigned_user.id = t.vendedor_asignado_id
+       WHERE t.id = $1 AND (t.is_active = TRUE OR $2 = 'ADMIN')`,
       [id, req.user.role]
     );
 
@@ -85,9 +94,10 @@ const getTallerById = async (req, res) => {
  * Create a new workshop
  */
 const createTaller = async (req, res) => {
-  const { nombre, latitud, longitud, tipo, radio_geocerca_metros } = req.body;
+  const { nombre, latitud, longitud, tipo, radio_geocerca_metros, sector } = req.body;
   const normalizedType = req.user.role === 'ADMIN' ? String(tipo || 'TALLER').toUpperCase() : 'TALLER';
   const geofenceRadius = req.user.role === 'ADMIN' ? Number(radio_geocerca_metros || 100) : 100;
+  const normalizedSector = normalizeSector(sector);
 
   if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     return res.status(400).json({ error: 'Ingrese un nombre y coordenadas GPS válidas.' });
@@ -101,6 +111,9 @@ const createTaller = async (req, res) => {
   if (!Number.isInteger(geofenceRadius) || geofenceRadius < 20 || geofenceRadius > 1000) {
     return res.status(400).json({ error: 'El radio de geocerca debe estar entre 20 y 1000 metros.' });
   }
+  if (normalizedSector && normalizedSector.length > 100) {
+    return res.status(400).json({ error: 'El sector no puede superar los 100 caracteres.' });
+  }
 
   try {
     const existingResult = await db.query(
@@ -111,11 +124,14 @@ const createTaller = async (req, res) => {
       return res.status(400).json({ error: 'Ya existe un taller registrado con ese nombre.' });
     }
 
+    const assignedSellerId = req.user.role === 'VENDEDOR' ? req.user.id : null;
     const result = await db.query(
-      `INSERT INTO talleres (nombre, latitud, longitud, tipo, radio_geocerca_metros)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, nombre, latitud, longitud, tipo, radio_geocerca_metros, created_at`,
-      [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius]
+      `INSERT INTO talleres
+         (nombre, latitud, longitud, tipo, radio_geocerca_metros, sector, vendedor_asignado_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, nombre, latitud, longitud, tipo, radio_geocerca_metros, sector,
+                 vendedor_asignado_id, created_at`,
+      [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius, normalizedSector, assignedSellerId]
     );
 
     await safeLogActivity({
@@ -123,7 +139,11 @@ const createTaller = async (req, res) => {
       action: 'TALLER_CREADO',
       entityType: 'taller',
       entityId: result.rows[0].id,
-      details: { nombre: result.rows[0].nombre, tipo: result.rows[0].tipo }
+      details: {
+        nombre: result.rows[0].nombre,
+        tipo: result.rows[0].tipo,
+        vendedor_asignado_id: result.rows[0].vendedor_asignado_id
+      }
     });
 
     return res.status(201).json({ message: 'Punto registrado exitosamente.', taller: result.rows[0] });
@@ -138,9 +158,16 @@ const createTaller = async (req, res) => {
  */
 const updateTaller = async (req, res) => {
   const { id } = req.params;
-  const { nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones, tipo, radio_geocerca_metros } = req.body;
+  const {
+    nombre, latitud, longitud, propietario, telefono, direccion, correo, observaciones,
+    tipo, radio_geocerca_metros, sector, vendedor_asignado_id
+  } = req.body;
   const normalizedType = String(tipo || 'TALLER').toUpperCase();
   const geofenceRadius = Number(radio_geocerca_metros || 100);
+  const normalizedSector = normalizeSector(sector);
+  const assignedSellerId = vendedor_asignado_id === '' || vendedor_asignado_id === null || vendedor_asignado_id === undefined
+    ? null
+    : Number(vendedor_asignado_id);
 
   if (!isNonEmptyString(nombre) || !isValidLatitude(latitud) || !isValidLongitude(longitud)) {
     return res.status(400).json({ 
@@ -158,12 +185,28 @@ const updateTaller = async (req, res) => {
   if (!Number.isInteger(geofenceRadius) || geofenceRadius < 20 || geofenceRadius > 1000) {
     return res.status(400).json({ error: 'El radio de geocerca debe estar entre 20 y 1000 metros.' });
   }
+  if (assignedSellerId !== null && !Number.isInteger(assignedSellerId)) {
+    return res.status(400).json({ error: 'Seleccione un vendedor válido.' });
+  }
+  if (normalizedSector && normalizedSector.length > 100) {
+    return res.status(400).json({ error: 'El sector no puede superar los 100 caracteres.' });
+  }
 
   try {
     // Check if workshop exists
     const checkRes = await db.query('SELECT id FROM talleres WHERE id = $1 AND is_active = TRUE', [id]);
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: 'Taller no encontrado.' });
+    }
+
+    if (assignedSellerId !== null) {
+      const sellerCheck = await db.query(
+        `SELECT id FROM users WHERE id = $1 AND role = 'VENDEDOR' AND is_active = TRUE`,
+        [assignedSellerId]
+      );
+      if (sellerCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'El vendedor seleccionado no está disponible.' });
+      }
     }
 
     // Check if another workshop already has this name (case-insensitive)
@@ -180,10 +223,11 @@ const updateTaller = async (req, res) => {
     const result = await db.query(
       `UPDATE talleres 
        SET nombre = $1, latitud = $2, longitud = $3, propietario = $4, telefono = $5,
-           direccion = $6, correo = $7, observaciones = $8, tipo = $9, radio_geocerca_metros = $10
-       WHERE id = $11
+           direccion = $6, correo = $7, observaciones = $8, tipo = $9, radio_geocerca_metros = $10,
+           sector = $11, vendedor_asignado_id = $12
+       WHERE id = $13
        RETURNING id, nombre, latitud, longitud, propietario, telefono, direccion, correo,
-                 observaciones, tipo, radio_geocerca_metros, created_at`,
+                 observaciones, tipo, radio_geocerca_metros, sector, vendedor_asignado_id, created_at`,
       [
         nombre.trim(), 
         latitud, 
@@ -195,6 +239,8 @@ const updateTaller = async (req, res) => {
         observaciones ? observaciones.trim() : null,
         normalizedType,
         geofenceRadius,
+        normalizedSector,
+        assignedSellerId,
         id
       ]
     );
@@ -207,7 +253,9 @@ const updateTaller = async (req, res) => {
       details: {
         nombre: result.rows[0].nombre,
         tipo: result.rows[0].tipo,
-        radio_geocerca_metros: result.rows[0].radio_geocerca_metros
+        radio_geocerca_metros: result.rows[0].radio_geocerca_metros,
+        sector: result.rows[0].sector,
+        vendedor_asignado_id: result.rows[0].vendedor_asignado_id
       }
     });
 
