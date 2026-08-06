@@ -150,8 +150,8 @@ export default function GestionVendedores() {
 
   const handlePasswordChangeSubmit = async (e) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      setPasswordChangeError('La contraseña debe tener al menos 10 caracteres e incluir letras y números.');
+    if (!newPassword || newPassword.length < 6 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      setPasswordChangeError('La contraseña debe tener al menos 6 caracteres e incluir letras y números.');
       return;
     }
 
@@ -385,11 +385,11 @@ export default function GestionVendedores() {
                   id="reg-password"
                   type="password"
                   className="form-input"
-                  placeholder="Mínimo 10 caracteres, letras y números"
+                  placeholder="Mínimo 6 caracteres, letras y números"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={formLoading}
-                  minLength={10}
+                  minLength={6}
                   required
                 />
               </div>
@@ -573,11 +573,11 @@ export default function GestionVendedores() {
                 <input
                   type="password"
                   className="form-input"
-                  placeholder="Mínimo 10 caracteres, letras y números"
+                  placeholder="Mínimo 6 caracteres, letras y números"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   disabled={passwordChangeLoading}
-                  minLength={10}
+                  minLength={6}
                   required
                 />
               </div>

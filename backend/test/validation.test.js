@@ -21,8 +21,8 @@ test('valida los límites geográficos', () => {
   assert.equal(isValidLongitude(181), false);
 });
 
-test('exige contraseñas de al menos diez caracteres con letras y números', () => {
-  assert.match(validatePassword('corta1'), /10 caracteres/);
+test('exige contraseñas de al menos seis caracteres con letras y números', () => {
+  assert.match(validatePassword('abc1'), /6 caracteres/);
   assert.match(validatePassword('solamenteletras'), /letras y números/);
-  assert.equal(validatePassword('Segura2026'), '');
+  assert.equal(validatePassword('Clave1'), '');
 });
