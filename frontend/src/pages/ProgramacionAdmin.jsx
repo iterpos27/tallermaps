@@ -70,10 +70,12 @@ export default function ProgramacionAdmin() {
   const handleExportExcel = () => {
     if (reporte.length === 0) return;
 
-    const headers = ['NOMBRE TALLER', 'FECHA', 'QUIEN HIZO VISITA', 'OBSERVACION'];
+    const headers = ['NOMBRE TALLER', 'FECHA', 'HORA', 'DURACION (MIN)', 'QUIEN HIZO VISITA', 'OBSERVACION'];
     const rows = reporte.map((item) => [
       item.taller_nombre,
       item.fecha ? new Date(item.fecha).toLocaleDateString('es-EC') : '',
+      item.hora_programada ? item.hora_programada.slice(0, 5) : '',
+      item.duracion_minutos || 30,
       item.vendedor_nombre,
       item.observacion || ''
     ]);
@@ -218,6 +220,8 @@ export default function ProgramacionAdmin() {
             <thead>
               <tr>
                 <th>Fecha programada</th>
+                <th>Hora</th>
+                <th>Duración</th>
                 <th>Taller</th>
                 <th>Vendedor</th>
                 <th>Observacion programada</th>
@@ -231,6 +235,8 @@ export default function ProgramacionAdmin() {
                 return (
                   <tr key={item.id}>
                     <td>{new Date(item.fecha_programada).toLocaleDateString('es-EC')}</td>
+                    <td>{item.hora_programada ? item.hora_programada.slice(0, 5) : '08:00'}</td>
+                    <td>{item.duracion_minutos || 30} min</td>
                     <td>{item.taller_nombre}</td>
                     <td>{item.vendedor_nombre}</td>
                     <td>{item.observacion || '-'}</td>
@@ -258,7 +264,7 @@ export default function ProgramacionAdmin() {
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-light)' }}>
           <h2 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>Vista previa del Excel</h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            El archivo exportado solo incluye: nombre taller, fecha, quien hizo visita y observacion.
+            El archivo exportado incluye el horario y la duración programada de cada visita.
           </p>
         </div>
         <table className="premium-table">
@@ -266,6 +272,8 @@ export default function ProgramacionAdmin() {
             <tr>
               <th>Nombre taller</th>
               <th>Fecha</th>
+              <th>Hora</th>
+              <th>Duración</th>
               <th>Quien hizo visita</th>
               <th>Observacion</th>
             </tr>
@@ -273,13 +281,15 @@ export default function ProgramacionAdmin() {
           <tbody>
             {reporte.length === 0 ? (
               <tr>
-                <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Sin datos para exportar.</td>
+                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Sin datos para exportar.</td>
               </tr>
             ) : (
               reporte.map((item, index) => (
                 <tr key={`${item.taller_nombre}-${item.fecha}-${index}`}>
                   <td>{item.taller_nombre}</td>
                   <td>{item.fecha ? new Date(item.fecha).toLocaleDateString('es-EC') : '-'}</td>
+                  <td>{item.hora_programada ? item.hora_programada.slice(0, 5) : '08:00'}</td>
+                  <td>{item.duracion_minutos || 30} min</td>
                   <td>{item.vendedor_nombre}</td>
                   <td>{item.observacion || '-'}</td>
                 </tr>

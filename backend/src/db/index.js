@@ -180,7 +180,12 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       ADD COLUMN IF NOT EXISTS telefono VARCHAR(50),
       ADD COLUMN IF NOT EXISTS direccion VARCHAR(255),
       ADD COLUMN IF NOT EXISTS correo VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS observaciones TEXT;
+      ADD COLUMN IF NOT EXISTS observaciones TEXT,
+      ADD COLUMN IF NOT EXISTS sector VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS vendedor_asignado_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_talleres_sector ON talleres(sector);
+      CREATE INDEX IF NOT EXISTS idx_talleres_vendedor_asignado ON talleres(vendedor_asignado_id);
     `);
     console.log("Workshop detailed info columns verified.");
 
@@ -222,13 +227,32 @@ async function initializeSchema(dbClient, shouldConnect = false) {
         taller_id INTEGER NOT NULL REFERENCES talleres(id) ON DELETE CASCADE,
         vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         fecha_programada DATE NOT NULL,
+        hora_programada TIME NOT NULL DEFAULT '08:00',
+        duracion_minutos INTEGER NOT NULL DEFAULT 30 CHECK (duracion_minutos BETWEEN 1 AND 30),
         observacion TEXT,
         estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EJECUTADA', 'CANCELADA')),
         visita_id INTEGER REFERENCES visitas(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (taller_id, vendedor_id, fecha_programada)
+        UNIQUE (taller_id, vendedor_id, fecha_programada, hora_programada)
       );
+    `);
+
+    await dbClient.query(`
+      ALTER TABLE programaciones_visita
+      ADD COLUMN IF NOT EXISTS hora_programada TIME NOT NULL DEFAULT '08:00',
+      ADD COLUMN IF NOT EXISTS duracion_minutos INTEGER NOT NULL DEFAULT 30;
+
+      ALTER TABLE programaciones_visita
+      DROP CONSTRAINT IF EXISTS programaciones_visita_taller_id_vendedor_id_fecha_programada_key,
+      DROP CONSTRAINT IF EXISTS programaciones_visita_slot_key,
+      DROP CONSTRAINT IF EXISTS programaciones_visita_duracion_check;
+
+      ALTER TABLE programaciones_visita
+      ADD CONSTRAINT programaciones_visita_slot_key
+        UNIQUE (taller_id, vendedor_id, fecha_programada, hora_programada),
+      ADD CONSTRAINT programaciones_visita_duracion_check
+        CHECK (duracion_minutos BETWEEN 1 AND 30);
     `);
 
     await dbClient.query(`
