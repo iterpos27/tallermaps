@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/api';
 import { getPhotoUrl, handlePhotoError } from '../utils/photo';
-import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2, RotateCcw, ChevronLeft, ChevronRight, PlusCircle } from 'lucide-react';
+import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
 import AlertBanner from '../components/AlertBanner';
 
@@ -15,13 +15,6 @@ export default function GestionTalleres() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
-  const [creatingPoint, setCreatingPoint] = useState(false);
-  const [createNombre, setCreateNombre] = useState('');
-  const [createLat, setCreateLat] = useState('');
-  const [createLng, setCreateLng] = useState('');
-  const [createTipo, setCreateTipo] = useState('MATRIZ');
-  const [createRadio, setCreateRadio] = useState('100');
-  const [createLoading, setCreateLoading] = useState(false);
 
   // Edit Modal States
   const [editingTaller, setEditingTaller] = useState(null);
@@ -33,8 +26,6 @@ export default function GestionTalleres() {
   const [editDireccion, setEditDireccion] = useState('');
   const [editCorreo, setEditCorreo] = useState('');
   const [editObservaciones, setEditObservaciones] = useState('');
-  const [editTipo, setEditTipo] = useState('TALLER');
-  const [editRadioGeocerca, setEditRadioGeocerca] = useState('100');
   const [editLoading, setEditLoading] = useState(false);
 
   // History Modal States
@@ -62,33 +53,6 @@ export default function GestionTalleres() {
     fetchTalleres();
   }, [showArchived]);
 
-  const handleCreatePoint = async (event) => {
-    event.preventDefault();
-    setCreateLoading(true);
-    setError('');
-    try {
-      await api.talleres.create({
-        nombre: createNombre.trim(),
-        latitud: Number(createLat),
-        longitud: Number(createLng),
-        tipo: createTipo,
-        radio_geocerca_metros: Number(createRadio)
-      });
-      setSuccess(`${createNombre.trim()} fue registrado correctamente.`);
-      setCreatingPoint(false);
-      setCreateNombre('');
-      setCreateLat('');
-      setCreateLng('');
-      setCreateTipo('MATRIZ');
-      setCreateRadio('100');
-      await fetchTalleres();
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo registrar el punto.');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
   const handleEditClick = (taller) => {
     setEditingTaller(taller);
     setEditNombre(taller.nombre);
@@ -99,8 +63,6 @@ export default function GestionTalleres() {
     setEditDireccion(taller.direccion || '');
     setEditCorreo(taller.correo || '');
     setEditObservaciones(taller.observaciones || '');
-    setEditTipo(taller.tipo || 'TALLER');
-    setEditRadioGeocerca(String(taller.radio_geocerca_metros || 100));
     setError('');
     setSuccess('');
   };
@@ -126,8 +88,8 @@ export default function GestionTalleres() {
         direccion: editDireccion.trim(),
         correo: editCorreo.trim(),
         observaciones: editObservaciones.trim(),
-        tipo: editTipo,
-        radio_geocerca_metros: Number(editRadioGeocerca)
+        tipo: 'TALLER',
+        radio_geocerca_metros: Number(editingTaller.radio_geocerca_metros || 100)
       });
       setSuccess('¡Taller actualizado exitosamente!');
       setTimeout(() => {
@@ -198,14 +160,11 @@ export default function GestionTalleres() {
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+      <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
           <h1 className="page-title">Gestión de Talleres</h1>
           <p className="page-subtitle">Monitoree, corrija y audite los talleres registrados en Ecuador</p>
         </div>
-        <button type="button" className="btn btn-primary" style={{ width: 'auto' }} onClick={() => setCreatingPoint(true)}>
-          <PlusCircle size={18} /> Nueva matriz/local
-        </button>
       </div>
 
       {!editingTaller && <AlertBanner type="success" style={{ marginBottom: '20px' }}>{success}</AlertBanner>}
@@ -368,41 +327,6 @@ export default function GestionTalleres() {
         </div>
       )}
 
-      {creatingPoint && (
-        <Modal onClose={() => !createLoading && setCreatingPoint(false)} labelledBy="create-point-title" maxWidth="520px">
-          <h3 id="create-point-title" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '20px' }}>
-            Registrar punto de control
-          </h3>
-          {error && <div className="alert alert-danger" style={{ marginBottom: '16px' }}><span>{error}</span></div>}
-          <form onSubmit={handleCreatePoint}>
-            <div className="form-group">
-              <label className="form-label">Nombre</label>
-              <input className="form-input" value={createNombre} onChange={(e) => setCreateNombre(e.target.value)} required />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label">Tipo</label>
-                <select className="form-input form-select" value={createTipo} onChange={(e) => setCreateTipo(e.target.value)}>
-                  <option value="MATRIZ">Matriz</option><option value="LOCAL">Local</option><option value="ALMACEN">Almacén</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Radio (metros)</label>
-                <input type="number" min="20" max="1000" className="form-input" value={createRadio} onChange={(e) => setCreateRadio(e.target.value)} required />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group"><label className="form-label">Latitud</label><input type="number" step="any" className="form-input" value={createLat} onChange={(e) => setCreateLat(e.target.value)} required /></div>
-              <div className="form-group"><label className="form-label">Longitud</label><input type="number" step="any" className="form-input" value={createLng} onChange={(e) => setCreateLng(e.target.value)} required /></div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => setCreatingPoint(false)} disabled={createLoading}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }} disabled={createLoading}>{createLoading ? 'Guardando...' : 'Registrar'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
       {/* Edit Workshop Modal */}
       {editingTaller && (
         <Modal onClose={() => !editLoading && setEditingTaller(null)} labelledBy="edit-taller-title" maxWidth="580px">
@@ -496,22 +420,6 @@ export default function GestionTalleres() {
                   disabled={editLoading}
                   style={{ minHeight: '70px', resize: 'vertical' }}
                 />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Tipo de punto</label>
-                  <select className="form-input form-select" value={editTipo} onChange={(e) => setEditTipo(e.target.value)} disabled={editLoading}>
-                    <option value="TALLER">Taller (destino)</option>
-                    <option value="MATRIZ">Matriz (origen)</option>
-                    <option value="LOCAL">Local (origen o destino)</option>
-                    <option value="ALMACEN">Almacén (origen o destino)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Radio de geocerca (metros)</label>
-                  <input type="number" min="20" max="1000" step="1" className="form-input" value={editRadioGeocerca} onChange={(e) => setEditRadioGeocerca(e.target.value)} disabled={editLoading} required />
-                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>

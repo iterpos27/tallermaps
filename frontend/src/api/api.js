@@ -136,8 +136,13 @@ export const api = {
   },
   
   talleres: {
-    list: ({ includeDeleted = false } = {}) =>
-      makeRequest(`/talleres${includeDeleted ? '?include_deleted=true' : ''}`, { method: 'GET' }),
+    list: ({ includeDeleted = false, tipo = '' } = {}) => {
+      const params = new URLSearchParams();
+      if (includeDeleted) params.append('include_deleted', 'true');
+      if (tipo) params.append('tipo', tipo);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      return makeRequest(`/talleres${query}`, { method: 'GET' });
+    },
     get: (id) => 
       makeRequest(`/talleres/${id}`, { method: 'GET' }),
     create: (tallerData) => 

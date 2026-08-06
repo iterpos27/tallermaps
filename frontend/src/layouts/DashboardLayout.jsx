@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, Car, Wrench, CalendarDays, Activity, CloudOff, Truck } from 'lucide-react';
+import { Home, PlusCircle, ClipboardList, Map, Users, LogOut, Car, Wrench, CalendarDays, Activity, CloudOff, Truck, Warehouse } from 'lucide-react';
 import { getUser, clearSession, offlineStorage } from '../api/api';
 import MessengerTracker from '../components/MessengerTracker';
 
@@ -60,6 +60,7 @@ export default function DashboardLayout({ children }) {
     { to: '/mapa', label: 'Mapa Talleres', icon: Map },
     { to: '/vendedores', label: 'Vendedores', icon: Users },
     { to: '/talleres', label: 'Talleres', icon: Wrench },
+    { to: '/almacenes', label: 'Almacenes', icon: Warehouse },
     { to: '/actividad', label: 'Actividad', icon: Activity },
     { to: '/control-entregas', label: 'Entregas', icon: Truck },
   ];
