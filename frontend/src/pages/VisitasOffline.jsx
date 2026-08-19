@@ -50,7 +50,7 @@ export default function VisitasOffline() {
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
           <h1 className="page-title">Visitas sin conexión</h1>
-          <p className="page-subtitle">Revise datos pendientes o conflictos guardados en este dispositivo</p>
+          <p className="page-subtitle">Pendientes guardados en este dispositivo</p>
         </div>
         <button type="button" className="btn btn-primary" style={{ width: 'auto' }} onClick={retry} disabled={loading || !navigator.onLine}>
           <RefreshCw size={16} /> Reintentar sincronización

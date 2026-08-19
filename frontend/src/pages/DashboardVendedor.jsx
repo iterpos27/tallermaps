@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarDays, ClipboardList, Clock3, PlusCircle } from 'lucide-react';
+import { ArrowRight, CalendarDays, ClipboardList, Clock3, PlusCircle, Route } from 'lucide-react';
 import { api, getUser } from '../api/api';
 
 export default function DashboardVendedor() {
@@ -12,7 +12,10 @@ export default function DashboardVendedor() {
   useEffect(() => {
     const fetchProgramaciones = async () => {
       try {
-        const data = await api.programaciones.list();
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const today = new Date(now.getTime() - offset).toISOString().slice(0, 10);
+        const data = await api.programaciones.list({ fecha_inicio: today, fecha_fin: today });
         setProgramaciones(data);
       } catch (requestError) {
         setError(requestError.message || 'No se pudo cargar la programación de visitas.');
@@ -24,22 +27,20 @@ export default function DashboardVendedor() {
     fetchProgramaciones();
   }, []);
 
-  const visitasPendientes = programaciones.filter((item) => item.estado === 'PENDIENTE').length;
+  const visitasPendientes = programaciones.filter((item) => ['PENDIENTE', 'EN_CAMINO', 'INICIADA', 'REPROGRAMADA'].includes(item.estado)).length;
 
   const summaryCards = [
     {
-      label: 'Visitas programadas',
+      label: 'Visitas de hoy',
       value: programaciones.length,
-      description: 'Consulte toda su planificación de visitas.',
-      to: '/programar-visitas',
-      icon: CalendarDays,
+      to: '/mi-ruta',
+      icon: Route,
       iconClass: 'stat-icon-primary'
     },
     {
       label: 'Visitas pendientes',
       value: visitasPendientes,
-      description: 'Revise las visitas que todavía debe realizar.',
-      to: '/programar-visitas?estado=PENDIENTE',
+      to: '/mi-ruta',
       icon: Clock3,
       iconClass: 'stat-icon-success'
     }
@@ -47,20 +48,22 @@ export default function DashboardVendedor() {
 
   const actions = [
     {
+      label: 'Mi ruta de hoy',
+      to: '/mi-ruta',
+      icon: Route
+    },
+    {
       label: 'Programar visitas',
-      description: 'Organice los talleres que visitará.',
       to: '/programar-visitas',
       icon: CalendarDays
     },
     {
       label: 'Nueva visita',
-      description: 'Registre una visita realizada en campo.',
       to: '/registrar-visita',
       icon: PlusCircle
     },
     {
       label: 'Historial de visitas',
-      description: 'Consulte el detalle textual de sus visitas.',
       to: '/mis-visitas',
       icon: ClipboardList
     }
@@ -71,7 +74,7 @@ export default function DashboardVendedor() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Bienvenido, {user?.name}</h1>
-          <p className="page-subtitle">Resumen de sus visitas y accesos de trabajo</p>
+          <p className="page-subtitle">Su jornada de visitas</p>
         </div>
       </div>
 
@@ -101,7 +104,6 @@ export default function DashboardVendedor() {
                   <div className="stat-info">
                     <span className="stat-label">{card.label}</span>
                     <span className="stat-value">{card.value}</span>
-                    <span className="seller-summary-description" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>{card.description}</span>
                     <span className="seller-summary-link" style={{ color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '14px', fontSize: '0.88rem', fontWeight: 600 }}>
                       Ver detalle <ArrowRight size={15} />
                     </span>
@@ -131,7 +133,6 @@ export default function DashboardVendedor() {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '5px' }}>{action.label}</h3>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem', lineHeight: 1.4 }}>{action.description}</p>
                     </div>
                     <ArrowRight size={18} style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }} />
                   </Link>

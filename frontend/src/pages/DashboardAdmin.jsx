@@ -140,8 +140,8 @@ export default function DashboardAdmin() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Panel de Administración</h1>
-          <p className="page-subtitle">Supervisión y control de visitas registradas en Ecuador</p>
+          <h1 className="page-title">Resumen general</h1>
+          <p className="page-subtitle">Indicadores y visitas recientes</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
@@ -151,7 +151,7 @@ export default function DashboardAdmin() {
             disabled={visitas.length === 0}
           >
             <ClipboardList size={18} />
-            <span>Exportar Excel</span>
+            <span>Exportar</span>
           </button>
           
           <button
@@ -160,7 +160,7 @@ export default function DashboardAdmin() {
             style={{ width: 'auto' }}
           >
             <Map size={18} />
-            <span>Ver Mapa General</span>
+            <span>Ver mapa</span>
           </button>
         </div>
       </div>

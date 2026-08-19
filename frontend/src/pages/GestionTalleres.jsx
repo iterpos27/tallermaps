@@ -15,7 +15,7 @@ export default function GestionTalleres() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
-  const [vendedores, setVendedores] = useState([]);
+  const [sectors, setSectors] = useState([]);
 
   // Edit Modal States
   const [editingTaller, setEditingTaller] = useState(null);
@@ -27,8 +27,7 @@ export default function GestionTalleres() {
   const [editDireccion, setEditDireccion] = useState('');
   const [editCorreo, setEditCorreo] = useState('');
   const [editObservaciones, setEditObservaciones] = useState('');
-  const [editSector, setEditSector] = useState('');
-  const [editVendedorAsignado, setEditVendedorAsignado] = useState('');
+  const [editSectorId, setEditSectorId] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
   // History Modal States
@@ -57,15 +56,14 @@ export default function GestionTalleres() {
   }, [showArchived]);
 
   useEffect(() => {
-    const fetchVendedores = async () => {
+    const fetchSectors = async () => {
       try {
-        const users = await api.users.list();
-        setVendedores(users.filter((user) => user.role === 'VENDEDOR' && user.is_active !== false));
+        setSectors(await api.sectores.list());
       } catch {
-        setError('No se pudo cargar la lista de vendedores.');
+        setError('No se pudo cargar la lista de sectores.');
       }
     };
-    fetchVendedores();
+    fetchSectors();
   }, []);
 
   const handleEditClick = (taller) => {
@@ -78,8 +76,7 @@ export default function GestionTalleres() {
     setEditDireccion(taller.direccion || '');
     setEditCorreo(taller.correo || '');
     setEditObservaciones(taller.observaciones || '');
-    setEditSector(taller.sector || '');
-    setEditVendedorAsignado(taller.vendedor_asignado_id ? String(taller.vendedor_asignado_id) : '');
+    setEditSectorId(taller.sector_id ? String(taller.sector_id) : '');
     setError('');
     setSuccess('');
   };
@@ -105,8 +102,8 @@ export default function GestionTalleres() {
         direccion: editDireccion.trim(),
         correo: editCorreo.trim(),
         observaciones: editObservaciones.trim(),
-        sector: editSector.trim(),
-        vendedor_asignado_id: editVendedorAsignado || null,
+        sector_id: editSectorId || null,
+        vendedor_asignado_id: null,
         tipo: 'TALLER',
         radio_geocerca_metros: Number(editingTaller.radio_geocerca_metros || 100)
       });
@@ -184,8 +181,8 @@ export default function GestionTalleres() {
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Gestión de Talleres</h1>
-          <p className="page-subtitle">Monitoree, corrija y audite los talleres registrados en Ecuador</p>
+          <h1 className="page-title">Talleres</h1>
+          <p className="page-subtitle">Directorio y ubicaciones registradas</p>
         </div>
       </div>
 
@@ -273,7 +270,7 @@ export default function GestionTalleres() {
                     <div style={{ fontWeight: 700, color: taller.sector ? 'var(--primary)' : 'var(--text-muted)', marginBottom: '4px' }}>
                       {taller.sector || 'Sin sector'}
                     </div>
-                    <div>{taller.vendedor_asignado_nombre || 'Sin vendedor asignado'}</div>
+                    <div>{taller.sector_vendedores || 'Sin vendedores asignados'}</div>
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     {taller.ultimo_vendedor_nombre ? (
@@ -451,33 +448,15 @@ export default function GestionTalleres() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Sector del mapa</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Ej. Norte, Centro, Valle"
-                    value={editSector}
-                    onChange={(event) => setEditSector(event.target.value)}
-                    disabled={editLoading}
-                    maxLength={100}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Vendedor responsable</label>
-                  <select
-                    className="form-input form-select"
-                    value={editVendedorAsignado}
-                    onChange={(event) => setEditVendedorAsignado(event.target.value)}
-                    disabled={editLoading}
-                  >
-                    <option value="">Sin asignar</option>
-                    {vendedores.map((vendedor) => (
-                      <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="form-group">
+                <label className="form-label">Sector</label>
+                <select className="form-input form-select" value={editSectorId} onChange={(event) => setEditSectorId(event.target.value)} disabled={editLoading}>
+                  <option value="">Sin sector</option>
+                  {sectors.filter((sector) => sector.is_active !== false).map((sector) => (
+                    <option key={sector.id} value={sector.id}>{sector.nombre}</option>
+                  ))}
+                </select>
+                <p className="field-help">Los vendedores responsables se determinan por la asignación del sector.</p>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>

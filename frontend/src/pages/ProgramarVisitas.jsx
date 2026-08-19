@@ -149,7 +149,11 @@ export default function ProgramarVisitas() {
 
   const estadoStyles = {
     PENDIENTE: { color: '#92400e', background: '#fffbeb', border: '#fde68a' },
+    EN_CAMINO: { color: '#1d5596', background: '#eff6ff', border: '#bfdbfe' },
+    INICIADA: { color: '#1d5596', background: '#eff6ff', border: '#93c5fd' },
     EJECUTADA: { color: '#047857', background: '#ecfdf5', border: '#a7f3d0' },
+    FALLIDA: { color: '#991b1b', background: '#fef2f2', border: '#fca5a5' },
+    REPROGRAMADA: { color: '#6d28d9', background: '#f5f3ff', border: '#ddd6fe' },
     CANCELADA: { color: '#991b1b', background: '#fef2f2', border: '#fca5a5' }
   };
 

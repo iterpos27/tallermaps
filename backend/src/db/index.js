@@ -189,6 +189,74 @@ async function initializeSchema(dbClient, shouldConnect = false) {
     `);
     console.log("Workshop detailed info columns verified.");
 
+    // Normalize geographic sectors and migrate existing free-text assignments.
+    console.log("Ensuring normalized sectors and seller assignments exist...");
+    await dbClient.query(`
+      CREATE TABLE IF NOT EXISTS sectores (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        color VARCHAR(7) NOT NULL DEFAULT '#1d5596' CHECK (color ~ '^#[0-9A-Fa-f]{6}$'),
+        poligono_geojson JSONB,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sectores_nombre_lower ON sectores (LOWER(nombre));
+
+      ALTER TABLE talleres
+      ADD COLUMN IF NOT EXISTS sector_id INTEGER REFERENCES sectores(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS vendedor_sectores (
+        vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sector_id INTEGER NOT NULL REFERENCES sectores(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (vendedor_id, sector_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_talleres_sector_id ON talleres(sector_id);
+      CREATE INDEX IF NOT EXISTS idx_vendedor_sectores_sector ON vendedor_sectores(sector_id, vendedor_id);
+
+      INSERT INTO sectores (nombre)
+      SELECT DISTINCT TRIM(t.sector)
+      FROM talleres t
+      WHERE NULLIF(TRIM(t.sector), '') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM sectores s WHERE LOWER(s.nombre) = LOWER(TRIM(t.sector))
+        );
+
+      UPDATE talleres t
+      SET sector_id = s.id
+      FROM sectores s
+      WHERE t.sector_id IS NULL
+        AND NULLIF(TRIM(t.sector), '') IS NOT NULL
+        AND LOWER(s.nombre) = LOWER(TRIM(t.sector));
+
+      INSERT INTO sectores (nombre, color)
+      SELECT 'Por clasificar', '#64748b'
+      WHERE EXISTS (
+        SELECT 1 FROM talleres WHERE tipo = 'TALLER' AND sector_id IS NULL
+      )
+        AND NOT EXISTS (
+          SELECT 1 FROM sectores WHERE LOWER(nombre) = LOWER('Por clasificar')
+        );
+
+      UPDATE talleres t
+      SET sector_id = s.id, sector = s.nombre
+      FROM sectores s
+      WHERE t.tipo = 'TALLER'
+        AND t.sector_id IS NULL
+        AND LOWER(s.nombre) = LOWER('Por clasificar');
+
+      INSERT INTO vendedor_sectores (vendedor_id, sector_id)
+      SELECT DISTINCT t.vendedor_asignado_id, t.sector_id
+      FROM talleres t
+      JOIN users u ON u.id = t.vendedor_asignado_id AND u.role = 'VENDEDOR'
+      WHERE t.vendedor_asignado_id IS NOT NULL AND t.sector_id IS NOT NULL
+      ON CONFLICT DO NOTHING;
+    `);
+    console.log("Normalized sectors and seller assignments verified.");
+
     // Step 8: Ensure recoverable workshop deletion and audit logging exist
     console.log("Ensuring workshop lifecycle and audit tables exist...");
     await dbClient.query(`
@@ -246,13 +314,20 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       ALTER TABLE programaciones_visita
       DROP CONSTRAINT IF EXISTS programaciones_visita_taller_id_vendedor_id_fecha_programada_key,
       DROP CONSTRAINT IF EXISTS programaciones_visita_slot_key,
-      DROP CONSTRAINT IF EXISTS programaciones_visita_duracion_check;
+      DROP CONSTRAINT IF EXISTS programaciones_visita_duracion_check,
+      DROP CONSTRAINT IF EXISTS programaciones_visita_estado_check;
 
       ALTER TABLE programaciones_visita
+      ADD COLUMN IF NOT EXISTS orden_ruta INTEGER,
+      ADD COLUMN IF NOT EXISTS iniciada_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS finalizada_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS motivo_fallo TEXT,
       ADD CONSTRAINT programaciones_visita_slot_key
         UNIQUE (taller_id, vendedor_id, fecha_programada, hora_programada),
       ADD CONSTRAINT programaciones_visita_duracion_check
-        CHECK (duracion_minutos BETWEEN 1 AND 30);
+        CHECK (duracion_minutos BETWEEN 1 AND 30),
+      ADD CONSTRAINT programaciones_visita_estado_check
+        CHECK (estado IN ('PENDIENTE', 'EN_CAMINO', 'INICIADA', 'EJECUTADA', 'FALLIDA', 'REPROGRAMADA', 'CANCELADA'));
     `);
 
     await dbClient.query(`

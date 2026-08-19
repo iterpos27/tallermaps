@@ -48,8 +48,8 @@ export default function ActividadAdmin() {
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Actividad Administrativa</h1>
-          <p className="page-subtitle">Registro auditable de cambios sensibles realizados en el sistema</p>
+          <h1 className="page-title">Actividad</h1>
+          <p className="page-subtitle">Historial de cambios del sistema</p>
         </div>
         <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={loadActivity} disabled={loading}>
           <RefreshCw size={16} /> Actualizar

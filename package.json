@@ -1,6 +1,6 @@
 {
   "name": "tallervisitas-pro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Unified deploy config for TallerVisitas Pro",
   "main": "backend/src/index.js",
   "engines": {

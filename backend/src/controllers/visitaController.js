@@ -1,7 +1,13 @@
 const db = require('../db');
-const { isValidLatitude, isValidLongitude } = require('../utils/validation');
+const {
+  isValidLatitude,
+  isValidLongitude,
+  isValidObservation,
+  MIN_OBSERVATION_LENGTH
+} = require('../utils/validation');
 const { storageService } = require('../services/storage');
 const { logActivity } = require('../services/audit');
+const { resolveSellerSectorId, sellerCanAccessWorkshop } = require('../services/sectorAccess');
 
 const normalizeVisitDateTime = (date, time) => {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
@@ -219,12 +225,19 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
  */
 const createVisita = async (req, res) => {
   const vendedor_id = req.user.id;
-  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id } = req.body;
+  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id, sector_id } = req.body;
   const file = req.file;
 
   // Validation
   if (!file) {
     return res.status(400).json({ error: 'La foto de la visita es requerida.' });
+  }
+
+  if (!isValidObservation(observacion)) {
+    await storageService.deleteFile(`/uploads/${file.filename}`);
+    return res.status(400).json({
+      error: `Las observaciones son obligatorias y deben tener al menos ${MIN_OBSERVATION_LENGTH} caracteres.`
+    });
   }
 
   if (!isValidLatitude(latitud) || !isValidLongitude(longitud)) {
@@ -239,10 +252,17 @@ const createVisita = async (req, res) => {
 
     if (taller_id) {
       // Check if workshop exists
-      const tallerCheck = await db.query('SELECT id FROM talleres WHERE id = $1 AND is_active = TRUE', [taller_id]);
+      const tallerCheck = await db.query(
+        `SELECT t.id
+         FROM talleres t
+         JOIN vendedor_sectores vs ON vs.sector_id = t.sector_id
+         JOIN sectores s ON s.id = vs.sector_id AND s.is_active = TRUE
+         WHERE t.id = $1 AND t.is_active = TRUE AND vs.vendedor_id = $2`,
+        [taller_id, vendedor_id]
+      );
       if (tallerCheck.rows.length === 0) {
         await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(400).json({ error: 'El taller seleccionado no existe.' });
+        return res.status(403).json({ error: 'El taller no pertenece a uno de sus sectores.' });
       }
       resolvedTallerId = taller_id;
     } else if (taller_nombre && taller_nombre.trim() !== '') {
@@ -252,13 +272,18 @@ const createVisita = async (req, res) => {
       
       if (nameCheck.rows.length > 0) {
         resolvedTallerId = nameCheck.rows[0].id;
+        if (!await sellerCanAccessWorkshop(db, vendedor_id, resolvedTallerId)) {
+          await storageService.deleteFile(`/uploads/${file.filename}`);
+          return res.status(403).json({ error: 'Ya existe un taller con ese nombre fuera de sus sectores.' });
+        }
       } else {
         // Create new workshop with coordinates
+        const resolvedSectorId = await resolveSellerSectorId(db, vendedor_id, sector_id, { latitude: latitud, longitude: longitud });
         const newTallerResult = await db.query(
-          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id)
-           VALUES ($1, $2, $3, $4)
+          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id, sector_id, sector)
+           VALUES ($1, $2, $3, $4, $5, (SELECT nombre FROM sectores WHERE id = $5))
            RETURNING id`,
-          [trimmedName, latitud, longitud, vendedor_id]
+          [trimmedName, latitud, longitud, vendedor_id, resolvedSectorId]
         );
         resolvedTallerId = newTallerResult.rows[0].id;
       }
@@ -349,7 +374,7 @@ const createVisita = async (req, res) => {
         foto_url,
         latitud,
         longitud,
-        observacion ? observacion.trim() : null,
+        observacion.trim(),
         fueraRango,
         distanciaMetros
       ]
@@ -358,7 +383,7 @@ const createVisita = async (req, res) => {
     if (resolvedProgramacionId) {
       await db.query(
         `UPDATE programaciones_visita
-         SET estado = 'EJECUTADA', visita_id = $1, updated_at = CURRENT_TIMESTAMP
+         SET estado = 'EJECUTADA', visita_id = $1, finalizada_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2`,
         [result.rows[0].id, resolvedProgramacionId]
       );
@@ -379,6 +404,7 @@ const createVisita = async (req, res) => {
         console.error('Failed to cleanup file:', err);
       }
     }
+    if (error.message.includes('sector')) return res.status(403).json({ error: error.message });
     return res.status(500).json({ error: 'Error al registrar la visita en el servidor.' });
   }
 };
@@ -422,7 +448,8 @@ const deleteVisita = async (req, res) => {
     }
     await client.query(
       `UPDATE programaciones_visita
-       SET estado = 'PENDIENTE', visita_id = NULL, updated_at = CURRENT_TIMESTAMP
+       SET estado = 'PENDIENTE', visita_id = NULL, iniciada_at = NULL, finalizada_at = NULL,
+           motivo_fallo = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE visita_id = $1 OR id = $2`,
       [id, visita.programacion_id]
     );

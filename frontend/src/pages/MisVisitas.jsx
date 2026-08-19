@@ -110,7 +110,7 @@ export default function MisVisitas() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Mis visitas</h1>
-          <p className="page-subtitle">Consulte y administre sus visitas realizadas</p>
+          <p className="page-subtitle">Historial de visitas realizadas</p>
         </div>
       </div>
 

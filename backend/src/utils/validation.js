@@ -17,6 +17,11 @@ const isValidCoordinate = (value, min, max) => {
 const isValidLatitude = (value) => isValidCoordinate(value, -90, 90);
 const isValidLongitude = (value) => isValidCoordinate(value, -180, 180);
 
+const MIN_OBSERVATION_LENGTH = 10;
+const isValidObservation = (value) => (
+  typeof value === 'string' && value.trim().length >= MIN_OBSERVATION_LENGTH
+);
+
 const validatePassword = (password) => {
   if (typeof password !== 'string' || password.length < 6) {
     return 'La contraseña debe tener al menos 6 caracteres.';
@@ -33,5 +38,7 @@ module.exports = {
   isValidEmail,
   isValidLatitude,
   isValidLongitude,
+  isValidObservation,
+  MIN_OBSERVATION_LENGTH,
   validatePassword
 };

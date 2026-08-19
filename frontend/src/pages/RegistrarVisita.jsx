@@ -4,6 +4,8 @@ import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, X } from 'lucide
 import { api, offlineStorage } from '../api/api';
 import { compressImage } from '../utils/image';
 
+const MIN_OBSERVATION_LENGTH = 10;
+
 export default function RegistrarVisita() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -12,7 +14,9 @@ export default function RegistrarVisita() {
   const [tallerMode, setTallerMode] = useState('existente'); // 'existente' | 'nuevo'
   const [talleres, setTalleres] = useState([]);
   const [programaciones, setProgramaciones] = useState([]);
-  const [selectedProgramacionId, setSelectedProgramacionId] = useState('');
+  const [sectors, setSectors] = useState([]);
+  const [selectedSectorId, setSelectedSectorId] = useState('');
+  const [selectedProgramacionId, setSelectedProgramacionId] = useState(() => searchParams.get('programacion_id') || '');
   const [selectedTallerId, setSelectedTallerId] = useState(() => searchParams.get('taller_id') || '');
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
   const [observacion, setObservacion] = useState('');
@@ -40,6 +44,7 @@ export default function RegistrarVisita() {
   useEffect(() => {
     fetchTalleres();
     fetchProgramaciones();
+    fetchSectors();
     getGPSLocation();
   }, []);
 
@@ -78,12 +83,29 @@ export default function RegistrarVisita() {
       future.setDate(future.getDate() + 14);
       const data = await api.programaciones.list({
         fecha_inicio: today,
-        fecha_fin: future.toISOString().split('T')[0],
-        estado: 'PENDIENTE'
+        fecha_fin: future.toISOString().split('T')[0]
       });
-      setProgramaciones(data);
+      const activeSchedules = data.filter((item) => ['PENDIENTE', 'EN_CAMINO', 'INICIADA'].includes(item.estado));
+      setProgramaciones(activeSchedules);
+      const requestedId = searchParams.get('programacion_id');
+      const requested = activeSchedules.find((item) => String(item.id) === String(requestedId));
+      if (requested) {
+        setSelectedProgramacionId(String(requested.id));
+        setSelectedTallerId(String(requested.taller_id));
+        if (requested.observacion) setObservacion(requested.observacion);
+      }
     } catch (err) {
       console.error('Error fetching schedules:', err);
+    }
+  };
+
+  const fetchSectors = async () => {
+    try {
+      const data = await api.sectores.list();
+      setSectors(data);
+      if (data.length === 1) setSelectedSectorId(String(data[0].id));
+    } catch (err) {
+      console.error('Error fetching sectors:', err);
     }
   };
 
@@ -183,6 +205,16 @@ export default function RegistrarVisita() {
       return;
     }
 
+    if (tallerMode === 'nuevo' && !selectedSectorId) {
+      setError('Seleccione el sector al que pertenece el nuevo taller.');
+      return;
+    }
+
+    if (observacion.trim().length < MIN_OBSERVATION_LENGTH) {
+      setError(`Las observaciones son obligatorias y deben tener al menos ${MIN_OBSERVATION_LENGTH} caracteres.`);
+      return;
+    }
+
     if (!coords) {
       setError('Las coordenadas GPS son requeridas. Active sus permisos de ubicación.');
       return;
@@ -201,6 +233,7 @@ export default function RegistrarVisita() {
         formData.append('taller_id', selectedTallerId);
       } else {
         formData.append('taller_nombre', nuevoTallerNombre);
+        formData.append('sector_id', selectedSectorId);
       }
       
       formData.append('latitud', coords.latitude);
@@ -227,6 +260,7 @@ export default function RegistrarVisita() {
           await offlineStorage.savePendingVisit({
             taller_id: tallerMode === 'existente' ? selectedTallerId : null,
             taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
+            sector_id: tallerMode === 'nuevo' ? selectedSectorId : null,
             latitud: coords.latitude,
             longitud: coords.longitude,
             observacion: observacion.trim(),
@@ -253,8 +287,8 @@ export default function RegistrarVisita() {
     <div className="camera-module">
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Registrar Nueva Visita</h1>
-          <p className="page-subtitle">Captura de visita con ubicación automática y cámara</p>
+          <h1 className="page-title">Nueva visita</h1>
+          <p className="page-subtitle">Ubicación, evidencia y observaciones</p>
         </div>
       </div>
 
@@ -304,7 +338,7 @@ export default function RegistrarVisita() {
       <form onSubmit={handleSubmit} className="glass-panel" style={{ padding: '24px' }}>
         {programaciones.length > 0 && (
           <div className="form-group">
-            <label className="form-label">Programacion pendiente</label>
+            <label className="form-label">Programación pendiente</label>
             <select
               className="form-input form-select"
               value={selectedProgramacionId}
@@ -374,6 +408,18 @@ export default function RegistrarVisita() {
                 }}
                 disabled={loading}
               />
+              <select
+                className="form-input form-select"
+                value={selectedSectorId}
+                onChange={(event) => setSelectedSectorId(event.target.value)}
+                disabled={loading}
+                required
+                style={{ marginTop: '10px' }}
+                aria-label="Sector del nuevo taller"
+              >
+                <option value="">Seleccione el sector</option>
+                {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nombre}</option>)}
+              </select>
               {suggestions.length > 0 && (
                 <div 
                   className="glass-panel" 
@@ -420,15 +466,27 @@ export default function RegistrarVisita() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Observacion de la visita</label>
+          <label className="form-label" htmlFor="visit-observation">
+            Observaciones de la visita <span aria-hidden="true">*</span>
+          </label>
           <textarea
+            id="visit-observation"
             className="form-input"
             placeholder="Escriba novedades, acuerdos, pedidos o motivo de la visita"
             value={observacion}
             onChange={(e) => setObservacion(e.target.value)}
             disabled={loading}
+            required
+            minLength={MIN_OBSERVATION_LENGTH}
+            aria-describedby="visit-observation-help"
             style={{ minHeight: '90px', resize: 'vertical' }}
           />
+          <div id="visit-observation-help" className="field-help">
+            <span>Mínimo {MIN_OBSERVATION_LENGTH} caracteres.</span>
+            <span className={observacion.trim().length < MIN_OBSERVATION_LENGTH ? 'field-count field-count--invalid' : 'field-count'}>
+              {observacion.trim().length}/{MIN_OBSERVATION_LENGTH}
+            </span>
+          </div>
         </div>
 
         {/* Camera / Photo module */}
@@ -496,7 +554,7 @@ export default function RegistrarVisita() {
           type="submit" 
           className="btn btn-primary" 
           style={{ marginTop: '10px' }} 
-          disabled={loading || gpsStatus === 'loading'}
+          disabled={loading || gpsStatus === 'loading' || observacion.trim().length < MIN_OBSERVATION_LENGTH}
         >
           {loading ? (
             <>

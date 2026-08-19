@@ -1,13 +1,16 @@
 {
   "name": "tallervisitas-backend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Backend para registrar visitas a talleres mecánicos - TallerVisitas Pro",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "node --test",
-    "backup": "node scripts/backup.js"
+    "backup": "node scripts/backup.js",
+    "migrate:sectors": "node scripts/migrateSectors.js",
+    "verify:sectors": "node scripts/verifySectorAccess.js",
+    "verify:route": "node scripts/verifyDailyRoute.js"
   },
   "keywords": [],
   "author": "",

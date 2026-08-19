@@ -12,6 +12,18 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE sectores (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  color VARCHAR(7) NOT NULL DEFAULT '#1d5596' CHECK (color ~ '^#[0-9A-Fa-f]{6}$'),
+  poligono_geojson JSONB,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_sectores_nombre_lower ON sectores (LOWER(nombre));
+
 -- Talleres table
 CREATE TABLE talleres (
   id SERIAL PRIMARY KEY,
@@ -24,6 +36,7 @@ CREATE TABLE talleres (
   correo VARCHAR(255),
   observaciones TEXT,
   sector VARCHAR(100),
+  sector_id INTEGER REFERENCES sectores(id) ON DELETE SET NULL,
   vendedor_asignado_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   tipo VARCHAR(20) NOT NULL DEFAULT 'TALLER' CHECK (tipo IN ('TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN')),
   radio_geocerca_metros INTEGER NOT NULL DEFAULT 100 CHECK (radio_geocerca_metros BETWEEN 20 AND 1000),
@@ -32,6 +45,16 @@ CREATE TABLE talleres (
   deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE vendedor_sectores (
+  vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sector_id INTEGER NOT NULL REFERENCES sectores(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (vendedor_id, sector_id)
+);
+
+CREATE INDEX idx_talleres_sector_id ON talleres(sector_id);
+CREATE INDEX idx_vendedor_sectores_sector ON vendedor_sectores(sector_id, vendedor_id);
 
 CREATE TABLE activity_logs (
   id BIGSERIAL PRIMARY KEY,
@@ -67,7 +90,11 @@ CREATE TABLE programaciones_visita (
   hora_programada TIME NOT NULL DEFAULT '08:00',
   duracion_minutos INTEGER NOT NULL DEFAULT 30 CHECK (duracion_minutos BETWEEN 1 AND 30),
   observacion TEXT,
-  estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EJECUTADA', 'CANCELADA')),
+  estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'EN_CAMINO', 'INICIADA', 'EJECUTADA', 'FALLIDA', 'REPROGRAMADA', 'CANCELADA')),
+  orden_ruta INTEGER,
+  iniciada_at TIMESTAMP,
+  finalizada_at TIMESTAMP,
+  motivo_fallo TEXT,
   visita_id INTEGER REFERENCES visitas(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
