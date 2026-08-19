@@ -6,22 +6,14 @@ import {
   updatePendingOfflineVisit
 } from '../storage/offlineVisits';
 
-// Detect server hostname to allow mobile devices on the same network to connect.
-// If localhost is used in mobile, it fails, so we default to the browser's current IP.
+// Use an explicit API URL only when the deployment requires one. In local
+// development Vite proxies /api and /uploads to the backend, so the browser
+// stays on one origin and does not depend on a hard-coded port.
 const getBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '');
   }
 
-  const host = window.location.hostname;
-  const port = window.location.port;
-  
-  // If running in development (Vite is typically on port 3000)
-  if (port === '3000') {
-    return `http://${host}:5000`;
-  }
-  
-  // In production, we request from the same origin serving the app
   return window.location.origin;
 };
 
@@ -176,6 +168,11 @@ export const api = {
     },
     get: (id) => 
       makeRequest(`/visitas/${id}`, { method: 'GET' }),
+    updateDateTime: (id, data) =>
+      makeRequest(`/visitas/${id}/fecha`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
     delete: (id) =>
       makeRequest(`/visitas/${id}`, { method: 'DELETE' }),
     create: (formData) => {
@@ -213,6 +210,11 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data)
       }),
+    optimizeToday: (data) =>
+      makeRequest('/programaciones/ruta-hoy/optimizar', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
     reporte: (filters = {}) => {
       const params = new URLSearchParams();
       if (filters.vendedor_id) params.append('vendedor_id', filters.vendedor_id);
@@ -232,6 +234,18 @@ export const api = {
   audit: {
     list: ({ page = 1, limit = 25 } = {}) =>
       makeRequest(`/audit?page=${page}&limit=${limit}`, { method: 'GET' })
+  },
+
+  sectores: {
+    list: () => makeRequest('/sectores', { method: 'GET' }),
+    create: (data) => makeRequest('/sectores', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    update: (id, data) => makeRequest(`/sectores/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
   },
 
   entregas: {
@@ -282,6 +296,7 @@ export const offlineStorage = {
           formData.append('taller_id', visit.taller_id);
         } else {
           formData.append('taller_nombre', visit.taller_nombre);
+          if (visit.sector_id) formData.append('sector_id', visit.sector_id);
         }
         formData.append('latitud', visit.latitud);
         formData.append('longitud', visit.longitud);

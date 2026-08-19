@@ -22,7 +22,7 @@ npm run dev
 Variables locales principales en `backend/.env`:
 
 ```env
-PORT=5000
+PORT=5005
 NODE_ENV=development
 PGHOST=localhost
 PGUSER=postgres
@@ -42,7 +42,7 @@ npm install
 npm run dev
 ```
 
-El frontend corre en `http://localhost:3000` y en desarrollo apunta al backend usando el mismo host con puerto `5000`. Si usas otro puerto para el backend local, define `VITE_API_BASE_URL` en `frontend/.env`.
+El frontend corre en `http://localhost:3000`. En desarrollo, Vite redirige `/api` y `/uploads` al backend en `http://localhost:5005`, evitando problemas de CORS y funcionando también desde dispositivos de la red local. Si usas otro puerto, define `VITE_API_PROXY_TARGET` en `frontend/.env`.
 
 ## Build local unificado
 
@@ -177,6 +177,19 @@ Puede configurar `BACKUP_DIR` y `PG_DUMP_PATH`. En producción, programe este co
 - Los administradores pueden mostrar y restaurar talleres eliminados.
 - La pantalla **Actividad** registra cambios de usuarios, contraseñas y talleres.
 - Cada petición incluye `X-Request-Id`; `/health` comprueba también la conexión a PostgreSQL.
+
+## Sectores comerciales
+
+Los talleres se agrupan mediante sectores normalizados. Un vendedor puede tener uno o varios sectores y el backend limita automáticamente talleres, mapa, programaciones y nuevas visitas a esas asignaciones. Los administradores gestionan nombres, colores, estado y polígonos GeoJSON desde **Administración > Sectores** y asignan sectores desde **Personal**.
+
+Para migrar instalaciones existentes y verificar la separación territorial:
+
+```bash
+npm run migrate:sectors --prefix backend
+npm run verify:sectors --prefix backend
+```
+
+Los talleres antiguos sin clasificación se trasladan al sector transitorio **Por clasificar**, evitando pérdida de acceso durante la migración.
 
 ## Funcionamiento móvil y offline
 

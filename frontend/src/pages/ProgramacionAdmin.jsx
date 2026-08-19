@@ -57,7 +57,7 @@ export default function ProgramacionAdmin() {
       setReporte(reporteData);
       setVendedores(usersData.filter((user) => user.role === 'VENDEDOR'));
     } catch (err) {
-      setError(err.message || 'No se pudo cargar la programacion.');
+      setError(err.message || 'No se pudo cargar la programación.');
     } finally {
       setLoading(false);
     }
@@ -70,10 +70,12 @@ export default function ProgramacionAdmin() {
   const handleExportExcel = () => {
     if (reporte.length === 0) return;
 
-    const headers = ['NOMBRE TALLER', 'FECHA', 'QUIEN HIZO VISITA', 'OBSERVACION'];
+    const headers = ['NOMBRE TALLER', 'FECHA', 'HORA', 'DURACION (MIN)', 'QUIEN HIZO VISITA', 'OBSERVACION'];
     const rows = reporte.map((item) => [
       item.taller_nombre,
       item.fecha ? new Date(item.fecha).toLocaleDateString('es-EC') : '',
+      item.hora_programada ? item.hora_programada.slice(0, 5) : '',
+      item.duracion_minutos || 30,
       item.vendedor_nombre,
       item.observacion || ''
     ]);
@@ -99,13 +101,17 @@ export default function ProgramacionAdmin() {
   const stats = useMemo(() => {
     const total = programaciones.length;
     const ejecutadas = programaciones.filter((item) => item.estado === 'EJECUTADA').length;
-    const pendientes = programaciones.filter((item) => item.estado === 'PENDIENTE').length;
+    const pendientes = programaciones.filter((item) => ['PENDIENTE', 'EN_CAMINO', 'INICIADA', 'REPROGRAMADA'].includes(item.estado)).length;
     return { total, ejecutadas, pendientes };
   }, [programaciones]);
 
   const estadoStyles = {
     PENDIENTE: { color: '#92400e', background: '#fffbeb', border: '#fde68a' },
+    EN_CAMINO: { color: '#1d5596', background: '#eff6ff', border: '#bfdbfe' },
+    INICIADA: { color: '#1d5596', background: '#eff6ff', border: '#93c5fd' },
     EJECUTADA: { color: '#047857', background: '#ecfdf5', border: '#a7f3d0' },
+    FALLIDA: { color: '#991b1b', background: '#fef2f2', border: '#fca5a5' },
+    REPROGRAMADA: { color: '#6d28d9', background: '#f5f3ff', border: '#ddd6fe' },
     CANCELADA: { color: '#991b1b', background: '#fef2f2', border: '#fca5a5' }
   };
 
@@ -113,8 +119,8 @@ export default function ProgramacionAdmin() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Programacion de Visitas</h1>
-          <p className="page-subtitle">Revision semanal y reporte de programacion vs visitas ejecutadas</p>
+          <h1 className="page-title">Programación</h1>
+          <p className="page-subtitle">Planificación y cumplimiento semanal</p>
         </div>
         <button
           type="button"
@@ -173,7 +179,7 @@ export default function ProgramacionAdmin() {
             value={selectedVendedor}
             onChange={(e) => setSelectedVendedor(e.target.value)}
           >
-            <option value="">-- Todos --</option>
+            <option value="">Todos</option>
             {vendedores.map((vendedor) => (
               <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
             ))}
@@ -190,10 +196,14 @@ export default function ProgramacionAdmin() {
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Estado</label>
           <select className="form-input form-select" value={estado} onChange={(e) => setEstado(e.target.value)}>
-            <option value="">-- Todos --</option>
-            <option value="PENDIENTE">Pendiente</option>
-            <option value="EJECUTADA">Ejecutada</option>
-            <option value="CANCELADA">Cancelada</option>
+            <option value="">Todos</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="EN_CAMINO">En camino</option>
+              <option value="INICIADA">Iniciada</option>
+              <option value="EJECUTADA">Ejecutada</option>
+              <option value="FALLIDA">Fallida</option>
+              <option value="REPROGRAMADA">Reprogramada</option>
+              <option value="CANCELADA">Cancelada</option>
           </select>
         </div>
       </div>
@@ -201,13 +211,13 @@ export default function ProgramacionAdmin() {
       <div className="glass-panel" style={{ padding: 0, overflowX: 'auto', marginBottom: '24px' }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Search size={18} color="var(--primary)" />
-          <h2 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>Revision de programacion</h2>
+          <h2 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>Visitas programadas</h2>
         </div>
 
         {loading ? (
           <div className="loading-overlay">
             <div className="spinner"></div>
-            <p>Cargando programacion...</p>
+            <p>Cargando programación...</p>
           </div>
         ) : programaciones.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
@@ -218,9 +228,11 @@ export default function ProgramacionAdmin() {
             <thead>
               <tr>
                 <th>Fecha programada</th>
+                <th>Hora</th>
+                <th>Duración</th>
                 <th>Taller</th>
                 <th>Vendedor</th>
-                <th>Observacion programada</th>
+                <th>Observación</th>
                 <th>Estado</th>
                 <th>Visita ejecutada</th>
               </tr>
@@ -231,6 +243,8 @@ export default function ProgramacionAdmin() {
                 return (
                   <tr key={item.id}>
                     <td>{new Date(item.fecha_programada).toLocaleDateString('es-EC')}</td>
+                    <td>{item.hora_programada ? item.hora_programada.slice(0, 5) : '08:00'}</td>
+                    <td>{item.duracion_minutos || 30} min</td>
                     <td>{item.taller_nombre}</td>
                     <td>{item.vendedor_nombre}</td>
                     <td>{item.observacion || '-'}</td>
@@ -258,7 +272,7 @@ export default function ProgramacionAdmin() {
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border-light)' }}>
           <h2 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>Vista previa del Excel</h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            El archivo exportado solo incluye: nombre taller, fecha, quien hizo visita y observacion.
+            El archivo exportado incluye el horario y la duración programada de cada visita.
           </p>
         </div>
         <table className="premium-table">
@@ -266,6 +280,8 @@ export default function ProgramacionAdmin() {
             <tr>
               <th>Nombre taller</th>
               <th>Fecha</th>
+              <th>Hora</th>
+              <th>Duración</th>
               <th>Quien hizo visita</th>
               <th>Observacion</th>
             </tr>
@@ -273,13 +289,15 @@ export default function ProgramacionAdmin() {
           <tbody>
             {reporte.length === 0 ? (
               <tr>
-                <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Sin datos para exportar.</td>
+                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Sin datos para exportar.</td>
               </tr>
             ) : (
               reporte.map((item, index) => (
                 <tr key={`${item.taller_nombre}-${item.fecha}-${index}`}>
                   <td>{item.taller_nombre}</td>
                   <td>{item.fecha ? new Date(item.fecha).toLocaleDateString('es-EC') : '-'}</td>
+                  <td>{item.hora_programada ? item.hora_programada.slice(0, 5) : '08:00'}</td>
+                  <td>{item.duracion_minutos || 30} min</td>
                   <td>{item.vendedor_nombre}</td>
                   <td>{item.observacion || '-'}</td>
                 </tr>

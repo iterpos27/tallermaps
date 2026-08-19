@@ -7,15 +7,45 @@ const {
   validatePassword
 } = require('../utils/validation');
 const { safeLogActivity } = require('../services/audit');
+const { normalizeSectorIds } = require('../services/sectorAccess');
+
+const replaceUserSectors = async (queryable, userId, role, sectorIdsInput) => {
+  const sectorIds = role === 'VENDEDOR' ? normalizeSectorIds(sectorIdsInput) : [];
+  if (sectorIds.length > 0) {
+    const valid = await queryable.query(
+      'SELECT id FROM sectores WHERE id = ANY($1::int[]) AND is_active = TRUE',
+      [sectorIds]
+    );
+    if (valid.rows.length !== sectorIds.length) {
+      throw new Error('Uno o más sectores seleccionados no están disponibles.');
+    }
+  }
+  await queryable.query('DELETE FROM vendedor_sectores WHERE vendedor_id = $1', [userId]);
+  if (sectorIds.length > 0) {
+    await queryable.query(
+      `INSERT INTO vendedor_sectores (vendedor_id, sector_id)
+       SELECT $1, UNNEST($2::int[])`,
+      [userId, sectorIds]
+    );
+  }
+  return sectorIds;
+};
 
 /**
  * Get all users (ADMIN only)
  */
 const getUsers = async (req, res) => {
   try {
-    const result = await db.query(
-      'SELECT id, name, email, username, role, is_active, created_at FROM users ORDER BY name ASC'
-    );
+    const result = await db.query(`
+      SELECT u.id, u.name, u.email, u.username, u.role, u.is_active, u.created_at,
+             COALESCE(ARRAY_AGG(s.id ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '{}') AS sector_ids,
+             COALESCE(ARRAY_AGG(s.nombre ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '{}') AS sectores
+      FROM users u
+      LEFT JOIN vendedor_sectores vs ON vs.vendedor_id = u.id
+      LEFT JOIN sectores s ON s.id = vs.sector_id
+      GROUP BY u.id
+      ORDER BY u.name ASC
+    `);
 
     return res.status(200).json(result.rows);
   } catch (error) {
@@ -30,7 +60,8 @@ const getUsers = async (req, res) => {
  * Create a new user (ADMIN only)
  */
 const createUser = async (req, res) => {
-  const { name, email, username, password, role } = req.body;
+  const { name, email, username, password, role, sector_ids } = req.body;
+  let transactionClient;
 
   // Validation
   if (!isNonEmptyString(name) || !isNonEmptyString(email) || !password || !role) {
@@ -53,6 +84,9 @@ const createUser = async (req, res) => {
     return res.status(400).json({ 
       error: 'El rol debe ser ADMIN, VENDEDOR o MENSAJERO.'
     });
+  }
+  if (normalizedRole === 'VENDEDOR' && normalizeSectorIds(sector_ids).length === 0) {
+    return res.status(400).json({ error: 'Asigne al menos un sector al vendedor.' });
   }
 
   try {
@@ -93,13 +127,20 @@ const createUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user
-    const result = await db.query(
+    transactionClient = await db.pool.connect();
+    await transactionClient.query('BEGIN');
+    const result = await transactionClient.query(
       `INSERT INTO users (name, email, username, password_hash, role) 
        VALUES ($1, $2, $3, $4, $5) 
        RETURNING id, name, email, username, role, created_at`,
       [name.trim(), normalizeEmail(email), finalUsername, passwordHash, normalizedRole]
     );
+
+    const assignedSectorIds = await replaceUserSectors(transactionClient, result.rows[0].id, normalizedRole, sector_ids);
+    await transactionClient.query('COMMIT');
+    transactionClient.release();
+    transactionClient = null;
+    result.rows[0].sector_ids = assignedSectorIds;
 
     await safeLogActivity({
       req,
@@ -115,6 +156,13 @@ const createUser = async (req, res) => {
     });
 
   } catch (error) {
+    if (transactionClient) {
+      await transactionClient.query('ROLLBACK');
+      transactionClient.release();
+    }
+    if (error.message.includes('sectores seleccionados')) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Error creating user:', error);
     return res.status(500).json({ 
       error: 'Error al crear el usuario.' 
@@ -172,7 +220,8 @@ const changePassword = async (req, res) => {
  */
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, username, role, is_active } = req.body;
+  const { name, email, username, role, is_active, sector_ids } = req.body;
+  let transactionClient;
 
   if (!isNonEmptyString(name) || !isNonEmptyString(email) || !role) {
     return res.status(400).json({ 
@@ -187,6 +236,9 @@ const updateUser = async (req, res) => {
   const normalizedRole = role.toUpperCase();
   if (!['ADMIN', 'VENDEDOR', 'MENSAJERO'].includes(normalizedRole)) {
     return res.status(400).json({ error: 'El rol debe ser ADMIN, VENDEDOR o MENSAJERO.' });
+  }
+  if (normalizedRole === 'VENDEDOR' && is_active !== false && normalizeSectorIds(sector_ids).length === 0) {
+    return res.status(400).json({ error: 'Asigne al menos un sector al vendedor.' });
   }
 
   try {
@@ -217,13 +269,21 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ error: 'El nombre de usuario ya está registrado por otro usuario.' });
     }
 
-    const result = await db.query(
+    transactionClient = await db.pool.connect();
+    await transactionClient.query('BEGIN');
+    const result = await transactionClient.query(
       `UPDATE users 
        SET name = $1, email = $2, username = $3, role = $4, is_active = $5 
        WHERE id = $6 
        RETURNING id, name, email, username, role, is_active, created_at`,
       [name.trim(), normalizeEmail(email), finalUsername, normalizedRole, is_active === undefined ? true : Boolean(is_active), id]
     );
+
+    const assignedSectorIds = await replaceUserSectors(transactionClient, id, normalizedRole, sector_ids);
+    await transactionClient.query('COMMIT');
+    transactionClient.release();
+    transactionClient = null;
+    result.rows[0].sector_ids = assignedSectorIds;
 
     await safeLogActivity({
       req,
@@ -238,6 +298,13 @@ const updateUser = async (req, res) => {
       user: result.rows[0]
     });
   } catch (error) {
+    if (transactionClient) {
+      await transactionClient.query('ROLLBACK');
+      transactionClient.release();
+    }
+    if (error.message.includes('sectores seleccionados')) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Error updating user:', error);
     return res.status(500).json({ error: 'Error al actualizar el usuario.' });
   }

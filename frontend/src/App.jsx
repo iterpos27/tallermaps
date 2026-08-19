@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { getToken, getUser } from './api/api';
 
@@ -12,7 +12,6 @@ import DashboardVendedor from './pages/DashboardVendedor';
 import RegistrarVisita from './pages/RegistrarVisita';
 import ProgramarVisitas from './pages/ProgramarVisitas';
 import MisVisitas from './pages/MisVisitas';
-import MapaTalleres from './pages/MapaTalleres';
 import GestionVendedores from './pages/GestionVendedores';
 import GestionTalleres from './pages/GestionTalleres';
 import GestionAlmacenes from './pages/GestionAlmacenes';
@@ -21,6 +20,10 @@ import ActividadAdmin from './pages/ActividadAdmin';
 import VisitasOffline from './pages/VisitasOffline';
 import EntregasMensajero from './pages/EntregasMensajero';
 import ControlEntregas from './pages/ControlEntregas';
+import GestionSectores from './pages/GestionSectores';
+
+const MapaTalleres = lazy(() => import('./pages/MapaTalleres'));
+const MiRutaHoy = lazy(() => import('./pages/MiRutaHoy'));
 
 /**
  * Route Guard for authenticated users
@@ -60,7 +63,8 @@ function CentralDashboard() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<div className="loading-overlay"><div className="spinner" /><p>Cargando módulo...</p></div>}>
+        <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
 
@@ -77,6 +81,16 @@ export default function App() {
         />
 
         {/* Vendor-Only Routes */}
+        <Route
+          path="/mi-ruta"
+          element={
+            <ProtectedRoute allowedRoles={['VENDEDOR']}>
+              <DashboardLayout>
+                <MiRutaHoy />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/registrar-visita"
           element={
@@ -150,7 +164,7 @@ export default function App() {
         <Route
           path="/mapa"
           element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ProtectedRoute allowedRoles={['ADMIN', 'VENDEDOR']}>
               <DashboardLayout>
                 <MapaTalleres />
               </DashboardLayout>
@@ -158,7 +172,7 @@ export default function App() {
           }
         />
         <Route
-          path="/vendedores"
+          path="/usuarios"
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <DashboardLayout>
@@ -178,6 +192,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/vendedores" element={<Navigate to="/usuarios" replace />} />
 
         <Route
           path="/almacenes"
@@ -186,6 +201,15 @@ export default function App() {
               <DashboardLayout>
                 <GestionAlmacenes />
               </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/sectores"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <DashboardLayout><GestionSectores /></DashboardLayout>
             </ProtectedRoute>
           }
         />
@@ -203,7 +227,8 @@ export default function App() {
 
         {/* Catch-all redirect */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

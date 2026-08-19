@@ -15,6 +15,7 @@ export default function GestionTalleres() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
+  const [sectors, setSectors] = useState([]);
 
   // Edit Modal States
   const [editingTaller, setEditingTaller] = useState(null);
@@ -26,6 +27,7 @@ export default function GestionTalleres() {
   const [editDireccion, setEditDireccion] = useState('');
   const [editCorreo, setEditCorreo] = useState('');
   const [editObservaciones, setEditObservaciones] = useState('');
+  const [editSectorId, setEditSectorId] = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
   // History Modal States
@@ -53,6 +55,17 @@ export default function GestionTalleres() {
     fetchTalleres();
   }, [showArchived]);
 
+  useEffect(() => {
+    const fetchSectors = async () => {
+      try {
+        setSectors(await api.sectores.list());
+      } catch {
+        setError('No se pudo cargar la lista de sectores.');
+      }
+    };
+    fetchSectors();
+  }, []);
+
   const handleEditClick = (taller) => {
     setEditingTaller(taller);
     setEditNombre(taller.nombre);
@@ -63,6 +76,7 @@ export default function GestionTalleres() {
     setEditDireccion(taller.direccion || '');
     setEditCorreo(taller.correo || '');
     setEditObservaciones(taller.observaciones || '');
+    setEditSectorId(taller.sector_id ? String(taller.sector_id) : '');
     setError('');
     setSuccess('');
   };
@@ -88,6 +102,8 @@ export default function GestionTalleres() {
         direccion: editDireccion.trim(),
         correo: editCorreo.trim(),
         observaciones: editObservaciones.trim(),
+        sector_id: editSectorId || null,
+        vendedor_asignado_id: null,
         tipo: 'TALLER',
         radio_geocerca_metros: Number(editingTaller.radio_geocerca_metros || 100)
       });
@@ -148,9 +164,12 @@ export default function GestionTalleres() {
     }
   };
 
-  const filteredTalleres = talleres.filter((t) =>
-    t.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearch = searchTerm.toLowerCase();
+  const filteredTalleres = talleres.filter((t) => (
+    t.nombre.toLowerCase().includes(normalizedSearch)
+    || (t.sector || '').toLowerCase().includes(normalizedSearch)
+    || (t.vendedor_asignado_nombre || '').toLowerCase().includes(normalizedSearch)
+  ));
   const totalPages = Math.max(1, Math.ceil(filteredTalleres.length / PAGE_SIZE));
   const paginatedTalleres = filteredTalleres.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -162,8 +181,8 @@ export default function GestionTalleres() {
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Gestión de Talleres</h1>
-          <p className="page-subtitle">Monitoree, corrija y audite los talleres registrados en Ecuador</p>
+          <h1 className="page-title">Talleres</h1>
+          <p className="page-subtitle">Directorio y ubicaciones registradas</p>
         </div>
       </div>
 
@@ -178,7 +197,7 @@ export default function GestionTalleres() {
             <input
               type="text"
               className="form-input"
-              placeholder="Escriba el nombre..."
+              placeholder="Nombre, sector o vendedor..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{ paddingLeft: '40px' }}
@@ -212,6 +231,7 @@ export default function GestionTalleres() {
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <th style={{ padding: '16px' }}>Nombre del Taller</th>
+                <th style={{ padding: '16px' }}>Sector y responsable</th>
                 <th style={{ padding: '16px' }}>Ultimo Vendedor</th>
                 <th style={{ padding: '16px' }}>Coordenadas GPS</th>
                 <th style={{ padding: '16px' }}>Fecha Creación</th>
@@ -245,6 +265,12 @@ export default function GestionTalleres() {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <div style={{ fontWeight: 700, color: taller.sector ? 'var(--primary)' : 'var(--text-muted)', marginBottom: '4px' }}>
+                      {taller.sector || 'Sin sector'}
+                    </div>
+                    <div>{taller.sector_vendedores || 'Sin vendedores asignados'}</div>
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     {taller.ultimo_vendedor_nombre ? (
@@ -420,6 +446,17 @@ export default function GestionTalleres() {
                   disabled={editLoading}
                   style={{ minHeight: '70px', resize: 'vertical' }}
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Sector</label>
+                <select className="form-input form-select" value={editSectorId} onChange={(event) => setEditSectorId(event.target.value)} disabled={editLoading}>
+                  <option value="">Sin sector</option>
+                  {sectors.filter((sector) => sector.is_active !== false).map((sector) => (
+                    <option key={sector.id} value={sector.id}>{sector.nombre}</option>
+                  ))}
+                </select>
+                <p className="field-help">Los vendedores responsables se determinan por la asignación del sector.</p>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>

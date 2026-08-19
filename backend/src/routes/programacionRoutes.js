@@ -9,6 +9,7 @@ router.get('/', programacionController.getProgramaciones);
 router.post('/', programacionController.createProgramacion);
 router.post('/batch', programacionController.createProgramacionesBatch);
 router.get('/reporte', programacionController.getReporteProgramacion);
+router.post('/ruta-hoy/optimizar', programacionController.optimizeTodayRoute);
 router.put('/:id', programacionController.updateProgramacion);
 
 module.exports = router;

@@ -1,14 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Calendar, User, Eye, X, Navigation } from 'lucide-react';
-import { api } from '../api/api';
+import { api, getUser } from '../api/api';
 import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 
 // Fixed icon assets issue in Leaflet + Vite using Custom HTML/SVG DivIcon
-const createWorkshopIcon = (hasVisits) => {
-  const color = hasVisits ? '#10b981' : '#1d5596'; // green if visited, blue if empty
-  return L.divIcon({
+const SECTOR_COLORS = ['#1d5596', '#10b981', '#e2262f', '#8b5cf6', '#f59e0b', '#0891b2', '#db2777', '#4f46e5'];
+const sectorIconCache = new Map();
+
+const getSectorColor = (sector, configuredColor) => {
+  if (configuredColor) return configuredColor;
+  if (!sector) return '#64748b';
+  const hash = [...sector].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return SECTOR_COLORS[hash % SECTOR_COLORS.length];
+};
+
+const createWorkshopIcon = (sector, configuredColor) => {
+  const color = getSectorColor(sector, configuredColor);
+  if (sectorIconCache.has(color)) return sectorIconCache.get(color);
+
+  const icon = L.divIcon({
     html: `
       <div style="
         background-color: ${color}; 
@@ -36,6 +48,8 @@ const createWorkshopIcon = (hasVisits) => {
     iconAnchor: [14, 28], // anchors bottom point
     popupAnchor: [0, -28]
   });
+  sectorIconCache.set(color, icon);
+  return icon;
 };
 
 // Route stop marker icon
@@ -69,10 +83,13 @@ const ECUADOR_CENTER = [-1.831239, -78.183406];
 const DEFAULT_ZOOM = 7;
 
 export default function MapaTalleres() {
+  const user = getUser();
   const [talleres, setTalleres] = useState([]);
+  const [sectorEntities, setSectorEntities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activePhoto, setActivePhoto] = useState(null);
+  const [selectedSector, setSelectedSector] = useState('');
   
   // Routing states
   const [vendedores, setVendedores] = useState([]);
@@ -83,8 +100,9 @@ export default function MapaTalleres() {
   useEffect(() => {
     const fetchMapData = async () => {
       try {
-        const data = await api.mapa.talleres();
-        setTalleres(data);
+        const [workshops, sectorsData] = await Promise.all([api.mapa.talleres(), api.sectores.list()]);
+        setTalleres(workshops);
+        setSectorEntities(sectorsData);
       } catch {
         setError('Error al cargar la información del mapa.');
       } finally {
@@ -93,6 +111,7 @@ export default function MapaTalleres() {
     };
 
     const fetchVendedores = async () => {
+      if (user?.role !== 'ADMIN') return;
       try {
         const users = await api.users.list();
         setVendedores(users.filter(u => u.role === 'VENDEDOR'));
@@ -103,15 +122,16 @@ export default function MapaTalleres() {
 
     fetchMapData();
     fetchVendedores();
-  }, []);
+  }, [user?.role]);
 
   // Fetch route visits when seller or date changes
   useEffect(() => {
     const fetchRoute = async () => {
-      if (selectedVendedor && selectedDate) {
+      const canLoadRoute = selectedDate && (user?.role === 'VENDEDOR' || selectedVendedor);
+      if (canLoadRoute) {
         try {
           const data = await api.visitas.list({
-            vendedor_id: selectedVendedor,
+            vendedor_id: user?.role === 'ADMIN' ? selectedVendedor : undefined,
             fecha_inicio: selectedDate,
             fecha_fin: selectedDate
           });
@@ -126,14 +146,20 @@ export default function MapaTalleres() {
       }
     };
     fetchRoute();
-  }, [selectedVendedor, selectedDate]);
+  }, [selectedVendedor, selectedDate, user?.role]);
+
+  const sectors = useMemo(() => sectorEntities.filter((sector) => sector.is_active !== false), [sectorEntities]);
+
+  const visibleWorkshops = useMemo(() => (
+    selectedSector ? talleres.filter((taller) => String(taller.sector_id) === selectedSector) : talleres
+  ), [selectedSector, talleres]);
 
   return (
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Mapa General de Talleres</h1>
-          <p className="page-subtitle">Visualización geográfica de todos los talleres registrados</p>
+          <h1 className="page-title">Mapa de talleres</h1>
+          <p className="page-subtitle">Ubicaciones registradas</p>
         </div>
       </div>
 
@@ -159,18 +185,31 @@ export default function MapaTalleres() {
           <Navigation size={18} color="var(--primary)" style={{ transform: 'rotate(45deg)' }} />
           <strong style={{ fontSize: '0.9rem' }}>Trazar Ruta de Visitas:</strong>
         </div>
-        
+
         <select
           className="form-input form-select"
-          value={selectedVendedor}
-          onChange={(e) => setSelectedVendedor(e.target.value)}
+          value={selectedSector}
+          onChange={(event) => setSelectedSector(event.target.value)}
           style={{ padding: '8px 12px', height: '40px', fontSize: '0.85rem' }}
+          aria-label="Filtrar talleres por sector"
         >
-          <option value="">-- Seleccionar Vendedor --</option>
-          {vendedores.map(v => (
-            <option key={v.id} value={v.id}>{v.name}</option>
-          ))}
+          <option value="">Todos los sectores</option>
+          {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nombre}</option>)}
         </select>
+        
+        {user?.role === 'ADMIN' && (
+          <select
+            className="form-input form-select"
+            value={selectedVendedor}
+            onChange={(e) => setSelectedVendedor(e.target.value)}
+            style={{ padding: '8px 12px', height: '40px', fontSize: '0.85rem' }}
+          >
+            <option value="">Seleccionar vendedor</option>
+            {vendedores.map(v => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+        )}
 
         <input
           type="date"
@@ -180,18 +219,35 @@ export default function MapaTalleres() {
           style={{ padding: '8px 12px', height: '40px', fontSize: '0.85rem' }}
         />
 
-        {(selectedVendedor || selectedDate) && (
+        {(selectedVendedor || selectedDate || selectedSector) && (
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => { setSelectedVendedor(''); setSelectedDate(''); }}
+            onClick={() => { setSelectedVendedor(''); setSelectedDate(''); setSelectedSector(''); }}
             style={{ padding: '8px 12px', height: '40px', fontSize: '0.85rem', width: 'auto' }}
           >
-            Limpiar Ruta
+            Limpiar filtros
           </button>
         )}
 
       </div>
+
+      {sectors.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '-8px 0 16px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+          <strong>Sectores:</strong>
+          {sectors.map((sector) => (
+            <button
+              key={sector.id}
+              type="button"
+              onClick={() => setSelectedSector((current) => current === String(sector.id) ? '' : String(sector.id))}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 8px', borderRadius: '999px', border: selectedSector === String(sector.id) ? `2px solid ${sector.color}` : '1px solid var(--border-light)', background: '#fff', cursor: 'pointer', color: 'var(--text-dark)' }}
+            >
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: sector.color }}></span>
+              {sector.nombre} ({sector.talleres_count})
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="loading-overlay">
@@ -211,7 +267,14 @@ export default function MapaTalleres() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
-            {talleres.map((taller) => {
+            {sectors.filter((sector) => sector.poligono_geojson).map((sector) => (
+              <Polygon
+                key={`sector-${sector.id}`}
+                positions={sector.poligono_geojson.coordinates[0].map(([lng, lat]) => [lat, lng])}
+                pathOptions={{ color: sector.color, fillColor: sector.color, fillOpacity: 0.12, weight: 2 }}
+              />
+            ))}
+            {visibleWorkshops.map((taller) => {
               const lat = parseFloat(taller.latitud);
               const lng = parseFloat(taller.longitud);
               const hasVisits = !!taller.fecha_visita;
@@ -222,7 +285,7 @@ export default function MapaTalleres() {
                 <Marker 
                   key={taller.id} 
                   position={[lat, lng]} 
-                  icon={createWorkshopIcon(hasVisits)}
+                  icon={createWorkshopIcon(taller.sector, taller.sector_color)}
                 >
                   <Popup>
                     <div className="map-popup-card">
@@ -274,6 +337,15 @@ export default function MapaTalleres() {
 
                       <div className="map-popup-body">
                         <div className="map-popup-title">{taller.nombre}</div>
+
+                        <div className="map-popup-info">
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getSectorColor(taller.sector), flexShrink: 0 }}></span>
+                          <span>Sector: {taller.sector || 'Sin sector'}</span>
+                        </div>
+                        <div className="map-popup-info">
+                          <User size={12} />
+                          <span>Responsable: {taller.vendedor_asignado_nombre || 'Sin asignar'}</span>
+                        </div>
                         
                         {hasVisits ? (
                           <>

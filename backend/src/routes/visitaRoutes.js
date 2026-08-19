@@ -13,8 +13,11 @@ router.get('/', visitaController.getVisitas);
 // POST /api/visitas (accepts multi-part form data with field 'foto')
 router.post('/', upload.single('foto'), visitaController.createVisita);
 
-// DELETE /api/visitas/:id (only administrators can permanently delete visits)
-router.delete('/:id', authorizeRoles('ADMIN'), visitaController.deleteVisita);
+// PUT /api/visitas/:id/fecha (seller can edit only their own visit)
+router.put('/:id/fecha', authorizeRoles(['ADMIN', 'VENDEDOR']), visitaController.updateVisitaDateTime);
+
+// DELETE /api/visitas/:id (seller can delete only their own visit)
+router.delete('/:id', authorizeRoles(['ADMIN', 'VENDEDOR']), visitaController.deleteVisita);
 
 // GET /api/visitas/:id
 router.get('/:id', visitaController.getVisitaById);

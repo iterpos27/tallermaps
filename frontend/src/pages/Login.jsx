@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Car } from 'lucide-react';
 import { api, getToken, setSession } from '../api/api';
+import AppFooter from '../components/AppFooter';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -51,9 +52,9 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card glass-panel">
         <div className="auth-header">
-          <div className="logo-icon">🚗</div>
+          <div className="logo-icon"><Car size={48} color="#1d5596" strokeWidth={1.5} /></div>
           <h1 className="auth-title">TallerVisitas Pro</h1>
-          <p className="auth-subtitle">Registro de visitas a talleres mecánicos</p>
+          <p className="auth-subtitle">Gestión de visitas de campo</p>
         </div>
 
         {infoMessage && (
@@ -135,8 +136,8 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.82rem', color: '#6b7280' }}>
-          <p>Ecuador • 2026</p>
+        <div className="auth-footer">
+          <AppFooter />
         </div>
       </div>
     </div>

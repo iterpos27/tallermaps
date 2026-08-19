@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, CheckCircle, AlertTriangle, Lock, X, Edit, Power } from 'lucide-react';
 import { api } from '../api/api';
+import SectorMultiSelect from '../components/SectorMultiSelect';
 
 export default function GestionVendedores() {
   const [users, setUsers] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Creation modal & form states
@@ -13,6 +15,7 @@ export default function GestionVendedores() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('VENDEDOR');
+  const [sectorIds, setSectorIds] = useState([]);
 
   // Edit modal & form states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -32,8 +35,9 @@ export default function GestionVendedores() {
 
   const fetchUsers = async () => {
     try {
-      const data = await api.users.list();
-      setUsers(data);
+      const [usersData, sectorsData] = await Promise.all([api.users.list(), api.sectores.list()]);
+      setUsers(usersData);
+      setSectors(sectorsData);
     } catch {
       setError('No se pudo cargar la lista de usuarios.');
     } finally {
@@ -55,11 +59,15 @@ export default function GestionVendedores() {
       setError('Todos los campos son obligatorios para registrar un usuario.');
       return;
     }
+    if (role === 'VENDEDOR' && sectorIds.length === 0) {
+      setError('Asigne al menos un sector al vendedor.');
+      return;
+    }
 
     setFormLoading(true);
 
     try {
-      await api.users.create({ name, email, username, password, role });
+      await api.users.create({ name, email, username, password, role, sector_ids: role === 'VENDEDOR' ? sectorIds : [] });
       setSuccess('¡Usuario registrado exitosamente!');
       setIsCreateModalOpen(false);
       
@@ -69,6 +77,7 @@ export default function GestionVendedores() {
       setUsername('');
       setPassword('');
       setRole('VENDEDOR');
+      setSectorIds([]);
       
       fetchUsers();
     } catch (err) {
@@ -87,7 +96,8 @@ export default function GestionVendedores() {
       email: user.email,
       username: user.username || '',
       role: user.role,
-      is_active: user.is_active === undefined ? true : user.is_active
+      is_active: user.is_active === undefined ? true : user.is_active,
+      sector_ids: user.sector_ids || []
     });
     setIsEditModalOpen(true);
   };
@@ -100,6 +110,10 @@ export default function GestionVendedores() {
 
     if (!editUser.name || !editUser.email || !editUser.role) {
       setError('Nombre, correo y rol son obligatorios.');
+      return;
+    }
+    if (editUser.role === 'VENDEDOR' && editUser.is_active !== false && editUser.sector_ids.length === 0) {
+      setError('Asigne al menos un sector al vendedor.');
       return;
     }
 
@@ -131,7 +145,8 @@ export default function GestionVendedores() {
         email: user.email,
         username: user.username,
         role: user.role,
-        is_active: newStatus
+        is_active: newStatus,
+        sector_ids: user.sector_ids || []
       });
       setSuccess(`Usuario ${user.name} ${newStatus ? 'activado' : 'desactivado'} correctamente.`);
       fetchUsers();
@@ -177,8 +192,8 @@ export default function GestionVendedores() {
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 className="page-title">Gestión de Vendedores y Personal</h1>
-          <p className="page-subtitle">Administre los accesos, contraseñas y roles del sistema</p>
+          <h1 className="page-title">Usuarios</h1>
+          <p className="page-subtitle">Cuentas, roles, sectores y accesos</p>
         </div>
         <button 
           onClick={() => setIsCreateModalOpen(true)}
@@ -186,7 +201,7 @@ export default function GestionVendedores() {
           style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
         >
           <UserPlus size={18} />
-          <span>Registrar Usuario</span>
+          <span>Registrar usuario</span>
         </button>
       </div>
 
@@ -209,7 +224,7 @@ export default function GestionVendedores() {
       <div className="glass-panel" style={{ padding: '24px' }}>
         <h2 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Users size={20} color="var(--primary)" />
-          <span>Usuarios del Sistema</span>
+          <span>Usuarios del sistema</span>
         </h2>
 
         {loading ? (
@@ -225,6 +240,7 @@ export default function GestionVendedores() {
                   <th>Nombre</th>
                   <th>Correo / Usuario</th>
                   <th>Rol</th>
+                  <th>Sectores</th>
                   <th>Estado</th>
                   <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
@@ -242,6 +258,11 @@ export default function GestionVendedores() {
                             Usuario: <strong>{u.username}</strong>
                           </div>
                         )}
+                      </td>
+                      <td>
+                        {u.role === 'VENDEDOR' && u.sectores?.length > 0
+                          ? <div className="sector-tag-list">{u.sectores.map((sector) => <span key={sector} className="sector-tag">{sector}</span>)}</div>
+                          : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sin asignación</span>}
                       </td>
                       <td>
                         <span 
@@ -410,6 +431,13 @@ export default function GestionVendedores() {
                 </select>
               </div>
 
+              {role === 'VENDEDOR' && (
+                <div className="form-group">
+                  <label className="form-label">Sectores asignados</label>
+                  <SectorMultiSelect sectors={sectors} value={sectorIds} onChange={setSectorIds} disabled={formLoading} />
+                </div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button
                   type="button"
@@ -503,6 +531,18 @@ export default function GestionVendedores() {
                   <option value="ADMIN">ADMINISTRADOR (Acceso total)</option>
                 </select>
               </div>
+
+              {editUser.role === 'VENDEDOR' && (
+                <div className="form-group">
+                  <label className="form-label">Sectores asignados</label>
+                  <SectorMultiSelect
+                    sectors={sectors}
+                    value={editUser.sector_ids}
+                    onChange={(next) => setEditUser({ ...editUser, sector_ids: next })}
+                    disabled={formLoading}
+                  />
+                </div>
+              )}
 
               <div className="form-group" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input
