@@ -268,7 +268,7 @@ export default function GestionTalleres() {
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     <div style={{ fontWeight: 700, color: taller.sector ? 'var(--primary)' : 'var(--text-muted)', marginBottom: '4px' }}>
-                      {taller.sector || 'Sin sector'}
+                      {taller.sector || 'Pendiente de sectorizar'}
                     </div>
                     <div>{taller.sector_vendedores || 'Sin vendedores asignados'}</div>
                   </td>
@@ -451,7 +451,7 @@ export default function GestionTalleres() {
               <div className="form-group">
                 <label className="form-label">Sector</label>
                 <select className="form-input form-select" value={editSectorId} onChange={(event) => setEditSectorId(event.target.value)} disabled={editLoading}>
-                  <option value="">Sin sector</option>
+                  <option value="">Sin sector (pendiente)</option>
                   {sectors.filter((sector) => sector.is_active !== false).map((sector) => (
                     <option key={sector.id} value={sector.id}>{sector.nombre}</option>
                   ))}

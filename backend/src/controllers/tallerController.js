@@ -1,7 +1,6 @@
 const db = require('../db');
 const { logActivity, safeLogActivity } = require('../services/audit');
 const { isNonEmptyString, isValidEmail, isValidLatitude, isValidLongitude } = require('../utils/validation');
-const { resolveSellerSectorId } = require('../services/sectorAccess');
 
 /**
  * List all workshops (talleres)
@@ -144,9 +143,8 @@ const createTaller = async (req, res) => {
     }
 
     const assignedSellerId = req.user.role === 'VENDEDOR' ? req.user.id : null;
-    const resolvedSectorId = req.user.role === 'VENDEDOR'
-      ? await resolveSellerSectorId(db, req.user.id, sector_id, { latitude: latitud, longitude: longitud })
-      : (sector_id ? Number(sector_id) : null);
+    // Sellers register workshops without classifying them. Sector assignment is an admin task.
+    const resolvedSectorId = req.user.role === 'ADMIN' && sector_id ? Number(sector_id) : null;
     if (resolvedSectorId) {
       const sectorCheck = await db.query('SELECT id FROM sectores WHERE id = $1 AND is_active = TRUE', [resolvedSectorId]);
       if (sectorCheck.rows.length === 0) return res.status(400).json({ error: 'El sector seleccionado no está disponible.' });
@@ -174,7 +172,6 @@ const createTaller = async (req, res) => {
 
     return res.status(201).json({ message: 'Punto registrado exitosamente.', taller: result.rows[0] });
   } catch (error) {
-    if (error.message.includes('sector')) return res.status(403).json({ error: error.message });
     console.error('Error creating taller:', error);
     return res.status(500).json({ error: 'Error al registrar el punto.' });
   }

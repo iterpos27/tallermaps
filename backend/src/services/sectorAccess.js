@@ -1,5 +1,3 @@
-const { pointInPolygon } = require('../utils/geojson');
-
 const normalizeSectorIds = (value) => {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(Number).filter(Number.isInteger).filter((id) => id > 0))];
@@ -31,43 +29,8 @@ const sellerCanAccessWorkshop = async (queryable, sellerId, workshopId) => {
   return result.rows.length > 0;
 };
 
-const resolveSellerSectorId = async (queryable, sellerId, requestedSectorId, coordinates) => {
-  const sectorIds = await getSellerSectorIds(queryable, sellerId);
-  if (sectorIds.length === 0) {
-    throw new Error('El vendedor no tiene sectores asignados. Solicite la asignación a un administrador.');
-  }
-
-  if (requestedSectorId !== undefined && requestedSectorId !== null && requestedSectorId !== '') {
-    const normalizedId = Number(requestedSectorId);
-    if (!sectorIds.includes(normalizedId)) {
-      throw new Error('El sector seleccionado no está asignado al vendedor.');
-    }
-    return normalizedId;
-  }
-
-  if (sectorIds.length === 1) return sectorIds[0];
-
-  if (coordinates && Number.isFinite(Number(coordinates.latitude)) && Number.isFinite(Number(coordinates.longitude))) {
-    const sectors = await queryable.query(
-      `SELECT id, poligono_geojson
-       FROM sectores
-       WHERE id = ANY($1::int[]) AND is_active = TRUE AND poligono_geojson IS NOT NULL`,
-      [sectorIds]
-    );
-    const matches = sectors.rows.filter((sector) => pointInPolygon(
-      Number(coordinates.longitude),
-      Number(coordinates.latitude),
-      sector.poligono_geojson
-    ));
-    if (matches.length === 1) return Number(matches[0].id);
-  }
-
-  throw new Error('Seleccione uno de sus sectores para registrar el taller.');
-};
-
 module.exports = {
   normalizeSectorIds,
   getSellerSectorIds,
-  sellerCanAccessWorkshop,
-  resolveSellerSectorId
+  sellerCanAccessWorkshop
 };

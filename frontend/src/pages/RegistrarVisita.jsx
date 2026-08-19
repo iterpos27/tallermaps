@@ -14,8 +14,6 @@ export default function RegistrarVisita() {
   const [tallerMode, setTallerMode] = useState('existente'); // 'existente' | 'nuevo'
   const [talleres, setTalleres] = useState([]);
   const [programaciones, setProgramaciones] = useState([]);
-  const [sectors, setSectors] = useState([]);
-  const [selectedSectorId, setSelectedSectorId] = useState('');
   const [selectedProgramacionId, setSelectedProgramacionId] = useState(() => searchParams.get('programacion_id') || '');
   const [selectedTallerId, setSelectedTallerId] = useState(() => searchParams.get('taller_id') || '');
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
@@ -44,7 +42,6 @@ export default function RegistrarVisita() {
   useEffect(() => {
     fetchTalleres();
     fetchProgramaciones();
-    fetchSectors();
     getGPSLocation();
   }, []);
 
@@ -96,16 +93,6 @@ export default function RegistrarVisita() {
       }
     } catch (err) {
       console.error('Error fetching schedules:', err);
-    }
-  };
-
-  const fetchSectors = async () => {
-    try {
-      const data = await api.sectores.list();
-      setSectors(data);
-      if (data.length === 1) setSelectedSectorId(String(data[0].id));
-    } catch (err) {
-      console.error('Error fetching sectors:', err);
     }
   };
 
@@ -205,11 +192,6 @@ export default function RegistrarVisita() {
       return;
     }
 
-    if (tallerMode === 'nuevo' && !selectedSectorId) {
-      setError('Seleccione el sector al que pertenece el nuevo taller.');
-      return;
-    }
-
     if (observacion.trim().length < MIN_OBSERVATION_LENGTH) {
       setError(`Las observaciones son obligatorias y deben tener al menos ${MIN_OBSERVATION_LENGTH} caracteres.`);
       return;
@@ -233,7 +215,6 @@ export default function RegistrarVisita() {
         formData.append('taller_id', selectedTallerId);
       } else {
         formData.append('taller_nombre', nuevoTallerNombre);
-        formData.append('sector_id', selectedSectorId);
       }
       
       formData.append('latitud', coords.latitude);
@@ -260,7 +241,6 @@ export default function RegistrarVisita() {
           await offlineStorage.savePendingVisit({
             taller_id: tallerMode === 'existente' ? selectedTallerId : null,
             taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
-            sector_id: tallerMode === 'nuevo' ? selectedSectorId : null,
             latitud: coords.latitude,
             longitud: coords.longitude,
             observacion: observacion.trim(),
@@ -408,18 +388,9 @@ export default function RegistrarVisita() {
                 }}
                 disabled={loading}
               />
-              <select
-                className="form-input form-select"
-                value={selectedSectorId}
-                onChange={(event) => setSelectedSectorId(event.target.value)}
-                disabled={loading}
-                required
-                style={{ marginTop: '10px' }}
-                aria-label="Sector del nuevo taller"
-              >
-                <option value="">Seleccione el sector</option>
-                {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nombre}</option>)}
-              </select>
+              <p className="field-help" style={{ marginTop: '8px' }}>
+                El administrador asignará el sector después de registrar la visita.
+              </p>
               {suggestions.length > 0 && (
                 <div 
                   className="glass-panel" 
