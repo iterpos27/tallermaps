@@ -191,6 +191,8 @@ npm run verify:sectors --prefix backend
 
 Los talleres antiguos sin clasificación se trasladan al sector transitorio **Por clasificar**, evitando pérdida de acceso durante la migración.
 
+Los talleres nuevos registrados durante una visita quedan inicialmente **sin sector**. El vendedor no selecciona ni administra esta clasificación; un administrador asigna el sector posteriormente desde **Administración > Talleres**. Una vez clasificado, el taller solo aparece a los vendedores que tengan ese sector asignado.
+
 ## Funcionamiento móvil y offline
 
 - Las fotos se redimensionan y comprimen antes de subirlas.

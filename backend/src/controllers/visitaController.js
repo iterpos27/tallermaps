@@ -7,7 +7,7 @@ const {
 } = require('../utils/validation');
 const { storageService } = require('../services/storage');
 const { logActivity } = require('../services/audit');
-const { resolveSellerSectorId, sellerCanAccessWorkshop } = require('../services/sectorAccess');
+const { sellerCanAccessWorkshop } = require('../services/sectorAccess');
 
 const normalizeVisitDateTime = (date, time) => {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
@@ -225,7 +225,7 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
  */
 const createVisita = async (req, res) => {
   const vendedor_id = req.user.id;
-  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id, sector_id } = req.body;
+  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id } = req.body;
   const file = req.file;
 
   // Validation
@@ -277,13 +277,12 @@ const createVisita = async (req, res) => {
           return res.status(403).json({ error: 'Ya existe un taller con ese nombre fuera de sus sectores.' });
         }
       } else {
-        // Create new workshop with coordinates
-        const resolvedSectorId = await resolveSellerSectorId(db, vendedor_id, sector_id, { latitude: latitud, longitude: longitud });
+        // New workshops remain unclassified until an administrator assigns a sector.
         const newTallerResult = await db.query(
-          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id, sector_id, sector)
-           VALUES ($1, $2, $3, $4, $5, (SELECT nombre FROM sectores WHERE id = $5))
+          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id)
+           VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [trimmedName, latitud, longitud, vendedor_id, resolvedSectorId]
+          [trimmedName, latitud, longitud, vendedor_id]
         );
         resolvedTallerId = newTallerResult.rows[0].id;
       }
