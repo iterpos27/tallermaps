@@ -127,9 +127,6 @@ const createTaller = async (req, res) => {
   if (!['TALLER', 'MATRIZ', 'LOCAL', 'ALMACEN'].includes(normalizedType)) {
     return res.status(400).json({ error: 'El tipo de punto no es válido.' });
   }
-  if (req.user.role === 'ADMIN' && normalizedType === 'TALLER') {
-    return res.status(403).json({ error: 'Los talleres deben ser registrados por un vendedor o mensajero.' });
-  }
   if (!Number.isInteger(geofenceRadius) || geofenceRadius < 20 || geofenceRadius > 1000) {
     return res.status(400).json({ error: 'El radio de geocerca debe estar entre 20 y 1000 metros.' });
   }
