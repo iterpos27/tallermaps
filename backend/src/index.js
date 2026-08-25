@@ -44,6 +44,7 @@ app.use(requestLogger);
 
 // Enable CORS so the React app can communicate with the backend.
 app.use(cors({
+  credentials: true,
   origin: (origin, callback) => {
     if (!isProduction || !origin || productionOrigins.includes(origin)) {
       return callback(null, true);

@@ -4,7 +4,7 @@ import {
   Home, PlusCircle, ClipboardList, Map, Users, Car, Wrench,
   CalendarDays, Activity, CloudOff, Truck, Warehouse, MoreHorizontal, X, LogOut, MapPinned, Route,
 } from 'lucide-react';
-import { getUser, clearSession, offlineStorage } from '../api/api';
+import { api, getUser, clearSession, offlineStorage } from '../api/api';
 import MessengerTracker from '../components/MessengerTracker';
 import UserMenu from '../components/UserMenu';
 import AppFooter from '../components/AppFooter';
@@ -88,12 +88,15 @@ export default function DashboardLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [syncStatus, setSyncStatus] = useState('');
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef(null);
+  const syncRunningRef = useRef(false);
 
   useEffect(() => {
     const handleSync = async () => {
-      if (navigator.onLine) {
+      if (navigator.onLine && !syncRunningRef.current) {
+        syncRunningRef.current = true;
         try {
           const pending = await offlineStorage.getPendingVisits();
           if (pending.length > 0) {
@@ -110,14 +113,33 @@ export default function DashboardLayout({ children }) {
           }
         } catch (e) {
           console.error('Offline sync failed:', e);
-          setSyncStatus('');
+          setSyncStatus('No se pudo sincronizar. Se reintentará automáticamente.');
+        } finally {
+          syncRunningRef.current = false;
         }
       }
     };
 
+    const handleOnline = () => {
+      setIsOnline(true);
+      setSyncStatus('Conexión recuperada. Revisando visitas pendientes...');
+      handleSync();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('Sin conexión. Las nuevas visitas se guardarán en este dispositivo.');
+    };
+
+    if (!navigator.onLine) handleOffline();
     handleSync();
-    window.addEventListener('online', handleSync);
-    return () => window.removeEventListener('online', handleSync);
+    const intervalId = window.setInterval(handleSync, 60 * 1000);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -134,7 +156,12 @@ export default function DashboardLayout({ children }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // Clear the local view of the session even if the network is unavailable.
+    }
     clearSession();
     navigate('/login');
   };
@@ -212,7 +239,7 @@ export default function DashboardLayout({ children }) {
         <main className="main-content">
           {user.role === 'MENSAJERO' && <MessengerTracker />}
           {syncStatus && (
-            <div className="alert alert-success sync-banner">
+            <div className={`alert ${isOnline ? 'alert-success' : 'alert-danger'} sync-banner`} role="status">
               <span>{syncStatus}</span>
             </div>
           )}

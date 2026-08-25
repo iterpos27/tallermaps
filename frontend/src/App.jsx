@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { getToken, getUser } from './api/api';
+import { hasSession, getUser } from './api/api';
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
@@ -29,10 +29,10 @@ const MiRutaHoy = lazy(() => import('./pages/MiRutaHoy'));
  * Route Guard for authenticated users
  */
 function ProtectedRoute({ children, allowedRoles }) {
-  const token = getToken();
+  const sessionAvailable = hasSession();
   const user = getUser();
 
-  if (!token || !user) {
+  if (!sessionAvailable || !user) {
     return <Navigate to="/login" replace />;
   }
 

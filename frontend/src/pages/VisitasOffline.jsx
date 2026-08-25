@@ -10,6 +10,7 @@ export default function VisitasOffline() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const loadVisits = async () => {
     setLoading(true);
@@ -24,13 +25,20 @@ export default function VisitasOffline() {
 
   useEffect(() => {
     loadVisits();
+    const updateConnection = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+    return () => {
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
+    };
   }, []);
 
   const retry = async () => {
     setMessage('Reintentando sincronización...');
     setError('');
     try {
-      const result = await offlineStorage.syncPendingVisits(setMessage);
+      const result = await offlineStorage.syncPendingVisits(setMessage, { force: true });
       setMessage(`Sincronizadas: ${result.syncedCount}. Requieren revisión: ${result.conflictCount}.`);
       await loadVisits();
     } catch (retryError) {
@@ -52,7 +60,7 @@ export default function VisitasOffline() {
           <h1 className="page-title">Visitas sin conexión</h1>
           <p className="page-subtitle">Pendientes guardados en este dispositivo</p>
         </div>
-        <button type="button" className="btn btn-primary" style={{ width: 'auto' }} onClick={retry} disabled={loading || !navigator.onLine}>
+        <button type="button" className="btn btn-primary offline-retry-button" onClick={retry} disabled={loading || !isOnline}>
           <RefreshCw size={16} /> Reintentar sincronización
         </button>
       </div>
@@ -70,7 +78,7 @@ export default function VisitasOffline() {
       ) : (
         <div style={{ display: 'grid', gap: '12px' }}>
           {visits.map((visit) => (
-            <article key={visit.id} className="glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+            <article key={visit.id} className="glass-panel offline-visit-card">
               <div>
                 <strong>{visit.taller_nombre || `Taller #${visit.taller_id}`}</strong>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Polyline, Polygon, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Calendar, User, Eye, X, Navigation, Plus, MousePointer2 } from 'lucide-react';
 import { api, getUser } from '../api/api';
 import { getPhotoUrl, handlePhotoError } from '../utils/photo';
-import Modal from '../components/Modal';
+import MapBaseLayer from '../components/MapBaseLayer';
+import MapWorkshopForm from '../components/MapWorkshopForm';
 
 // Fixed icon assets issue in Leaflet + Vite using Custom HTML/SVG DivIcon
 const SECTOR_COLORS = ['#1d5596', '#10b981', '#e2262f', '#8b5cf6', '#f59e0b', '#0891b2', '#db2777', '#4f46e5'];
@@ -82,6 +83,7 @@ const createRouteNumberIcon = (number) => {
 // Center map on Ecuador
 const ECUADOR_CENTER = [-1.831239, -78.183406];
 const DEFAULT_ZOOM = 7;
+const MAP_LAYER_STORAGE_KEY = 'tallervisitas-map-layer';
 
 function MapWorkshopSelector({ enabled, onSelect }) {
   useMapEvents({
@@ -107,6 +109,8 @@ export default function MapaTalleres() {
   const [newWorkshopSectorId, setNewWorkshopSectorId] = useState('');
   const [newWorkshopError, setNewWorkshopError] = useState('');
   const [savingWorkshop, setSavingWorkshop] = useState(false);
+  const [mapLayer, setMapLayer] = useState(() => localStorage.getItem(MAP_LAYER_STORAGE_KEY) || 'street');
+  const [mapLayerWarning, setMapLayerWarning] = useState('');
   
   // Routing states
   const [vendedores, setVendedores] = useState([]);
@@ -222,6 +226,22 @@ export default function MapaTalleres() {
     }
   };
 
+  const selectMapLayer = (layer) => {
+    setMapLayer(layer);
+    setMapLayerWarning('');
+    localStorage.setItem(MAP_LAYER_STORAGE_KEY, layer);
+  };
+
+  const handleLayerUnavailable = (failedLayer) => {
+    if (failedLayer === 'satellite') {
+      setMapLayer('street');
+      localStorage.setItem(MAP_LAYER_STORAGE_KEY, 'street');
+      setMapLayerWarning('La vista satelital no respondió. Se restauró el mapa normal automáticamente.');
+      return;
+    }
+    setMapLayerWarning('Algunas secciones del mapa no pudieron cargarse. Revise la conexión e inténtelo nuevamente.');
+  };
+
   return (
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
@@ -335,6 +355,12 @@ export default function MapaTalleres() {
         </div>
       )}
 
+      {mapLayerWarning && (
+        <div className="alert" style={{ marginBottom: '16px' }} role="status">
+          <span>{mapLayerWarning}</span>
+        </div>
+      )}
+
       {loading ? (
         <div className="loading-overlay">
           <div className="spinner"></div>
@@ -342,6 +368,10 @@ export default function MapaTalleres() {
         </div>
       ) : (
         <div className="map-view-container">
+          <div className="map-layer-switcher" role="group" aria-label="Vista del mapa">
+            <button type="button" className={mapLayer === 'street' ? 'active' : ''} onClick={() => selectMapLayer('street')} aria-pressed={mapLayer === 'street'}>Mapa</button>
+            <button type="button" className={mapLayer === 'satellite' ? 'active' : ''} onClick={() => selectMapLayer('satellite')} aria-pressed={mapLayer === 'satellite'}>Satélite</button>
+          </div>
           <MapContainer 
             center={ECUADOR_CENTER} 
             zoom={DEFAULT_ZOOM} 
@@ -352,11 +382,7 @@ export default function MapaTalleres() {
               enabled={user?.role === 'ADMIN' && addingWorkshop}
               onSelect={handleMapWorkshopSelect}
             />
-            {/* Light Theme TileLayer (Voyager) */}
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            />
+            <MapBaseLayer layer={mapLayer} onUnavailable={handleLayerUnavailable} />
             {sectors.filter((sector) => sector.poligono_geojson).map((sector) => (
               <Polygon
                 key={`sector-${sector.id}`}
@@ -526,67 +552,19 @@ export default function MapaTalleres() {
         </div>
       )}
 
-      {user?.role === 'ADMIN' && newWorkshopPosition && (
-        <Modal onClose={closeWorkshopForm} labelledBy="new-map-workshop-title" maxWidth="520px">
-          <form onSubmit={handleCreateWorkshop}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h3 id="new-map-workshop-title" style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)', margin: 0 }}>Nuevo taller</h3>
-                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Ubicación seleccionada desde el mapa</p>
-              </div>
-              <button type="button" onClick={closeWorkshopForm} disabled={savingWorkshop} aria-label="Cerrar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {newWorkshopError && <div className="alert alert-danger" style={{ marginBottom: '16px' }}>{newWorkshopError}</div>}
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="new-map-workshop-name">Nombre del taller</label>
-              <input
-                id="new-map-workshop-name"
-                className="form-input"
-                value={newWorkshopName}
-                onChange={(event) => setNewWorkshopName(event.target.value)}
-                placeholder="Ej. Taller Mecánico Central"
-                autoFocus
-                disabled={savingWorkshop}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="new-map-workshop-sector">Sector</label>
-              <select
-                id="new-map-workshop-sector"
-                className="form-input form-select"
-                value={newWorkshopSectorId}
-                onChange={(event) => setNewWorkshopSectorId(event.target.value)}
-                disabled={savingWorkshop}
-              >
-                <option value="">Sin sector</option>
-                {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.nombre}</option>)}
-              </select>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label">Latitud</label>
-                <input className="form-input" value={newWorkshopPosition.lat.toFixed(6)} readOnly />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Longitud</label>
-                <input className="form-input" value={newWorkshopPosition.lng.toFixed(6)} readOnly />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button type="button" className="btn btn-secondary" onClick={closeWorkshopForm} disabled={savingWorkshop} style={{ width: 'auto' }}>Volver al mapa</button>
-              <button type="submit" className="btn btn-primary" disabled={savingWorkshop} style={{ width: 'auto' }}>
-                {savingWorkshop ? 'Guardando...' : 'Guardar taller'}
-              </button>
-            </div>
-          </form>
-        </Modal>
+      {user?.role === 'ADMIN' && (
+        <MapWorkshopForm
+          position={newWorkshopPosition}
+          name={newWorkshopName}
+          onNameChange={(event) => setNewWorkshopName(event.target.value)}
+          sectorId={newWorkshopSectorId}
+          onSectorChange={(event) => setNewWorkshopSectorId(event.target.value)}
+          sectors={sectors}
+          error={newWorkshopError}
+          saving={savingWorkshop}
+          onClose={closeWorkshopForm}
+          onSubmit={handleCreateWorkshop}
+        />
       )}
 
       {/* Lightbox for popups */}

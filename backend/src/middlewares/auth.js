@@ -12,8 +12,15 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
  */
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  // Authorization: Bearer <token>
-  const token = authHeader && authHeader.split(' ')[1];
+  const bearerToken = authHeader && authHeader.split(' ')[1];
+  const cookieHeader = req.headers.cookie || '';
+  const sessionCookie = cookieHeader
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith('taller_session='));
+  const cookieToken = sessionCookie ? decodeURIComponent(sessionCookie.slice('taller_session='.length)) : null;
+  // Bearer tokens remain supported for non-browser API clients.
+  const token = bearerToken || cookieToken;
 
   if (!token) {
     return res.status(401).json({ 

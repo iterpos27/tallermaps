@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Car } from 'lucide-react';
-import { api, getToken, setSession } from '../api/api';
+import { api, hasSession, setSession } from '../api/api';
 import AppFooter from '../components/AppFooter';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -14,7 +15,7 @@ export default function Login() {
 
   // If already authenticated, redirect to dashboard
   useEffect(() => {
-    if (getToken()) {
+    if (hasSession()) {
       navigate('/dashboard');
       return;
     }
@@ -23,7 +24,15 @@ export default function Login() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('expired') === 'true') {
       setInfoMessage('Su sesión ha expirado por inactividad. Por favor, inicie sesión nuevamente.');
+      return;
     }
+
+    api.auth.session()
+      .then((response) => {
+        setSession(response.user);
+        navigate('/dashboard');
+      })
+      .catch(() => {});
   }, [navigate]);
 
   const handleSubmit = async (e) => {
@@ -39,7 +48,7 @@ export default function Login() {
 
     try {
       const response = await api.auth.login(identifier, password);
-      setSession(response.token, response.user);
+      setSession(response.user);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión. Inténtelo de nuevo.');
@@ -110,18 +119,7 @@ export default function Login() {
             <label className="form-label" htmlFor="password">
               Contraseña
             </label>
-            <div className="input-wrapper">
-              <input
-                id="password"
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                required
-              />
-            </div>
+            <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading} required />
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
