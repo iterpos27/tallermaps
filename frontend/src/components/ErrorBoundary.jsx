@@ -1,5 +1,5 @@
 import React from 'react';
-import { API_BASE_URL, getToken } from '../api/api';
+import { API_BASE_URL, hasSession } from '../api/api';
 
 export default class ErrorBoundary extends React.Component {
   state = { hasError: false };
@@ -9,14 +9,13 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    const token = getToken();
-    if (!token) return;
+    if (!hasSession()) return;
 
     fetch(`${API_BASE_URL}/api/monitoring/client-errors`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         message: error.message,

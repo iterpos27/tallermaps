@@ -21,16 +21,18 @@ export const API_BASE_URL = getBaseUrl();
 const API_URL = `${API_BASE_URL}/api`;
 
 /**
- * Helper to get the saved auth token
+ * Browser sessions use an HttpOnly cookie. This helper now reports whether
+ * user metadata is available without exposing the credential to JavaScript.
  */
-export const getToken = () => localStorage.getItem('token');
+export const hasSession = () => Boolean(sessionStorage.getItem('user'));
 
 /**
  * Helper to save auth session
  */
-export const setSession = (token, user) => {
-  localStorage.setItem('token', token);
-  localStorage.setItem('user', JSON.stringify(user));
+export const setSession = (user) => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.setItem('user', JSON.stringify(user));
 };
 
 /**
@@ -39,38 +41,41 @@ export const setSession = (token, user) => {
 export const clearSession = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  sessionStorage.removeItem('user');
 };
 
 /**
  * Helper to get the logged-in user info
  */
 export const getUser = () => {
-  const userStr = localStorage.getItem('user');
-  return userStr ? JSON.parse(userStr) : null;
+  const userStr = sessionStorage.getItem('user');
+  if (!userStr) return null;
+  try {
+    return JSON.parse(userStr);
+  } catch {
+    sessionStorage.removeItem('user');
+    return null;
+  }
 };
 
 /**
  * Core request wrapper
  */
 const makeRequest = async (endpoint, options = {}) => {
-  const token = getToken();
-  
+  const { skipAuthRedirect = false, ...fetchOptions } = options;
   const headers = {
-    ...options.headers
+    ...fetchOptions.headers
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   // Do not set Content-Type header if body is FormData (let browser set it with boundary)
-  if (options.body && !(options.body instanceof FormData)) {
+  if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
+    ...fetchOptions,
+    headers,
+    credentials: 'include'
   });
 
   const data = await response.json().catch(() => ({}));
@@ -82,11 +87,9 @@ const makeRequest = async (endpoint, options = {}) => {
     requestError.data = data;
     
     // Auto logout if token expires or is invalid
-    if (response.status === 401 || response.status === 403) {
-      if (token) {
-        clearSession();
-        window.location.href = '/login?expired=true';
-      }
+    if (response.status === 401 && !skipAuthRedirect && getUser()) {
+      clearSession();
+      window.location.href = '/login?expired=true';
     }
     
     throw requestError;
@@ -103,8 +106,11 @@ export const api = {
     login: (identifier, password) => 
       makeRequest('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier, password })
-      })
+        body: JSON.stringify({ identifier, password }),
+        skipAuthRedirect: true
+      }),
+    session: () => makeRequest('/auth/session', { method: 'GET', skipAuthRedirect: true }),
+    logout: () => makeRequest('/auth/logout', { method: 'POST', skipAuthRedirect: true })
   },
   
   users: {
@@ -272,14 +278,19 @@ export const offlineStorage = {
   savePendingVisit: savePendingOfflineVisit,
   removePendingVisit: removePendingOfflineVisit,
 
-  syncPendingVisits: async (onProgress) => {
+  syncPendingVisits: async (onProgress, { force = false } = {}) => {
     const pending = await offlineStorage.getPendingVisits();
     if (pending.length === 0) return { syncedCount: 0, conflictCount: 0 };
 
     let syncedCount = 0;
     let conflictCount = 0;
+    let deferredCount = 0;
 
     for (const visit of pending) {
+      if (!force && visit.nextRetryAt && new Date(visit.nextRetryAt).getTime() > Date.now()) {
+        deferredCount++;
+        continue;
+      }
       try {
         if (onProgress) onProgress(`Sincronizando: ${visit.taller_nombre || 'Visita'}`);
         
@@ -317,11 +328,14 @@ export const offlineStorage = {
       } catch (err) {
         console.error('Error syncing visit:', visit, err);
         const isConflict = [400, 404, 409].includes(err.status);
+        const attempts = (visit.attempts || 0) + 1;
+        const retryDelayMinutes = Math.min(30, 2 ** Math.min(attempts, 5));
         await updatePendingOfflineVisit({
           ...visit,
-          attempts: (visit.attempts || 0) + 1,
+          attempts,
           lastError: err.message,
           lastAttemptAt: new Date().toISOString(),
+          nextRetryAt: isConflict ? null : new Date(Date.now() + retryDelayMinutes * 60 * 1000).toISOString(),
           status: isConflict ? 'needs_attention' : 'pending'
         });
         if (isConflict) {
@@ -334,6 +348,6 @@ export const offlineStorage = {
       }
     }
 
-    return { syncedCount, conflictCount };
+    return { syncedCount, conflictCount, deferredCount };
   }
 };

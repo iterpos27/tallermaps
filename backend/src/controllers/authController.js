@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tallervisitas_secret_key_2026_ecuador';
+const AUTH_COOKIE = 'taller_session';
+const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000;
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET es obligatorio en production.');
@@ -67,10 +69,17 @@ const login = async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    // Return token and user metadata (excluding password hash)
+    res.cookie(AUTH_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: AUTH_COOKIE_MAX_AGE,
+      path: '/'
+    });
+
+    // The JWT remains inaccessible to JavaScript; only safe user metadata is returned.
     return res.status(200).json({
       message: 'Inicio de sesión exitoso.',
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -88,6 +97,38 @@ const login = async (req, res) => {
   }
 };
 
+const getSession = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT id, name, email, username, role, is_active
+       FROM users
+       WHERE id = $1`,
+      [req.user.id]
+    );
+    const user = result.rows[0];
+    if (!user || user.is_active === false) {
+      res.clearCookie(AUTH_COOKIE, { path: '/' });
+      return res.status(401).json({ error: 'La sesión ya no está disponible.' });
+    }
+    return res.status(200).json({ user });
+  } catch (error) {
+    console.error('Error restoring session:', error);
+    return res.status(500).json({ error: 'No se pudo restaurar la sesión.' });
+  }
+};
+
+const logout = (req, res) => {
+  res.clearCookie(AUTH_COOKIE, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/'
+  });
+  return res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
+};
+
 module.exports = {
-  login
+  login,
+  getSession,
+  logout
 };

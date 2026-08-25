@@ -144,7 +144,25 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       console.log("Tables already exist. Skipping schema setup and seeding.");
     }
 
-    // Step 4: Ensure geofencing columns exist on visitas table
+    await dbClient.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(100) PRIMARY KEY,
+        description TEXT NOT NULL,
+        applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const legacyMigrationVersion = '001_existing_feature_schema';
+    const migrationCheck = await dbClient.query(
+      'SELECT 1 FROM schema_migrations WHERE version = $1',
+      [legacyMigrationVersion]
+    );
+
+    if (migrationCheck.rowCount === 0) {
+      console.log(`Applying database migration ${legacyMigrationVersion}...`);
+      await dbClient.query('BEGIN');
+      try {
+    // Migration 001: existing application feature schema.
     console.log("Ensuring geofencing columns exist on visitas table...");
     await dbClient.query(`
       ALTER TABLE visitas 
@@ -397,6 +415,19 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       CREATE INDEX IF NOT EXISTS idx_entregas_salida_at ON entregas_recorridos(salida_at DESC);
     `);
     console.log("Messenger delivery tracking verified.");
+        await dbClient.query(
+          'INSERT INTO schema_migrations (version, description) VALUES ($1, $2)',
+          [legacyMigrationVersion, 'Existing geofencing, sectors, audit, scheduling and delivery schema']
+        );
+        await dbClient.query('COMMIT');
+        console.log(`Database migration ${legacyMigrationVersion} applied.`);
+      } catch (migrationError) {
+        await dbClient.query('ROLLBACK');
+        throw migrationError;
+      }
+    } else {
+      console.log(`Database migration ${legacyMigrationVersion} already applied.`);
+    }
   } catch (error) {
     console.error("Error setting up database tables:", error);
     throw error;

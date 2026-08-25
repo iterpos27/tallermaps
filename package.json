@@ -13,6 +13,7 @@
     "build": "npm run install-frontend && npm run build-frontend && npm run install-backend",
     "lint": "npm run lint --prefix frontend",
     "test": "npm test --prefix backend",
+    "migrate": "npm run migrate --prefix backend",
     "check": "npm run lint && npm test && npm run build-frontend",
     "start": "node backend/src/index.js"
   },
