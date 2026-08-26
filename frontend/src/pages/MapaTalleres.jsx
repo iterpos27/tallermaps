@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { MapContainer, Marker, Popup, Polyline, Polygon, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, Popup, Polyline, Polygon, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { MapPin, Calendar, User, Eye, X, Navigation, Plus, MousePointer2 } from 'lucide-react';
+import { MapPin, Calendar, User, Eye, X, Navigation, Plus, MousePointer2, Clock3, Ruler, Warehouse } from 'lucide-react';
 import { api, getUser } from '../api/api';
 import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 import MapBaseLayer from '../components/MapBaseLayer';
@@ -9,7 +9,7 @@ import MapWorkshopForm from '../components/MapWorkshopForm';
 
 // Fixed icon assets issue in Leaflet + Vite using Custom HTML/SVG DivIcon
 const SECTOR_COLORS = ['#1d5596', '#10b981', '#e2262f', '#8b5cf6', '#f59e0b', '#0891b2', '#db2777', '#4f46e5'];
-const sectorIconCache = new Map();
+const pointIconCache = new Map();
 
 const getSectorColor = (sector, configuredColor) => {
   if (configuredColor) return configuredColor;
@@ -18,9 +18,15 @@ const getSectorColor = (sector, configuredColor) => {
   return SECTOR_COLORS[hash % SECTOR_COLORS.length];
 };
 
-const createWorkshopIcon = (sector, configuredColor) => {
-  const color = getSectorColor(sector, configuredColor);
-  if (sectorIconCache.has(color)) return sectorIconCache.get(color);
+const createPointIcon = (type) => {
+  const isWorkshop = type === 'TALLER';
+  const cacheKey = isWorkshop ? 'workshop' : type;
+  if (pointIconCache.has(cacheKey)) return pointIconCache.get(cacheKey);
+
+  const color = isWorkshop ? '#dc2626' : '#1d5596';
+  const symbol = isWorkshop
+    ? '<path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-2.4 2.4-2.1-2.1a4 4 0 0 0 5 5l-6.6 6.6a1.4 1.4 0 0 0 2 2l6.6-6.6a4 4 0 0 0 5-5l-2.1 2.1-2.4-2.4 2.1-2.1Z"/>'
+    : '<path d="M3 17V7l7-4 7 4v10M6 17v-6h8v6M8 13h4M8 15h4"/>';
 
   const icon = L.divIcon({
     html: `
@@ -36,13 +42,7 @@ const createWorkshopIcon = (sector, configuredColor) => {
         border: 2px solid #ffffff;
         box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       ">
-        <div style="
-          width: 10px; 
-          height: 10px; 
-          border-radius: 50%; 
-          background-color: #ffffff;
-          transform: rotate(45deg);
-        "></div>
+        <svg viewBox="0 0 20 20" aria-hidden="true" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transform:rotate(45deg)">${symbol}</svg>
       </div>
     `,
     className: 'custom-map-pin',
@@ -50,7 +50,7 @@ const createWorkshopIcon = (sector, configuredColor) => {
     iconAnchor: [14, 28], // anchors bottom point
     popupAnchor: [0, -28]
   });
-  sectorIconCache.set(color, icon);
+  pointIconCache.set(cacheKey, icon);
   return icon;
 };
 
@@ -95,6 +95,29 @@ function MapWorkshopSelector({ enabled, onSelect }) {
   return null;
 }
 
+function FitRouteBounds({ positions }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (positions.length > 1) {
+      map.fitBounds(L.latLngBounds(positions), { padding: [42, 42], maxZoom: 16 });
+    }
+  }, [map, positions]);
+
+  return null;
+}
+
+const formatDistance = (meters) => meters < 1000
+  ? `${Math.round(meters)} m`
+  : `${(meters / 1000).toFixed(meters >= 10000 ? 1 : 2)} km`;
+
+const formatDuration = (seconds) => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return hours ? `${hours} h ${remainingMinutes} min` : `${minutes} min`;
+};
+
 export default function MapaTalleres() {
   const user = getUser();
   const [talleres, setTalleres] = useState([]);
@@ -117,11 +140,16 @@ export default function MapaTalleres() {
   const [selectedVendedor, setSelectedVendedor] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [routeVisits, setRouteVisits] = useState([]);
+  const [routeOriginId, setRouteOriginId] = useState('');
+  const [routeDestinationId, setRouteDestinationId] = useState('');
+  const [calculatedRoute, setCalculatedRoute] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState('');
 
   const fetchMapData = useCallback(async () => {
     try {
-      const [workshops, sectorsData] = await Promise.all([api.mapa.talleres(), api.sectores.list()]);
-      setTalleres(workshops);
+      const [points, sectorsData] = await Promise.all([api.mapa.puntos(), api.sectores.list()]);
+      setTalleres(points);
       setSectorEntities(sectorsData);
       setError('');
     } catch {
@@ -173,9 +201,50 @@ export default function MapaTalleres() {
 
   const sectors = useMemo(() => sectorEntities.filter((sector) => sector.is_active !== false), [sectorEntities]);
 
-  const visibleWorkshops = useMemo(() => (
-    selectedSector ? talleres.filter((taller) => String(taller.sector_id) === selectedSector) : talleres
+  const workshops = useMemo(() => talleres.filter((point) => point.tipo === 'TALLER'), [talleres]);
+  const companyPoints = useMemo(() => talleres.filter((point) => point.tipo !== 'TALLER'), [talleres]);
+  const visiblePoints = useMemo(() => (
+    selectedSector
+      ? talleres.filter((point) => point.tipo !== 'TALLER' || String(point.sector_id) === selectedSector)
+      : talleres
   ), [selectedSector, talleres]);
+
+  const routePositions = useMemo(() => (
+    calculatedRoute?.geometria?.coordinates?.map(([lng, lat]) => [lat, lng]) || []
+  ), [calculatedRoute]);
+
+  const pointById = useCallback((id) => talleres.find((point) => String(point.id) === String(id)), [talleres]);
+
+  const calculateRoute = async () => {
+    const origin = pointById(routeOriginId);
+    const destination = pointById(routeDestinationId);
+    if (!origin || !destination || origin.id === destination.id) {
+      setRouteError('Seleccione dos puntos diferentes.');
+      return;
+    }
+
+    setRouteLoading(true);
+    setRouteError('');
+    setCalculatedRoute(null);
+    try {
+      const route = await api.mapa.ruta(
+        { latitud: origin.latitud, longitud: origin.longitud },
+        { latitud: destination.latitud, longitud: destination.longitud }
+      );
+      setCalculatedRoute({ ...route, origin, destination });
+    } catch (requestError) {
+      setRouteError(requestError.message || 'No se pudo calcular la ruta.');
+    } finally {
+      setRouteLoading(false);
+    }
+  };
+
+  const clearCalculatedRoute = () => {
+    setRouteOriginId('');
+    setRouteDestinationId('');
+    setCalculatedRoute(null);
+    setRouteError('');
+  };
 
   const closeWorkshopForm = () => {
     if (savingWorkshop) return;
@@ -246,8 +315,8 @@ export default function MapaTalleres() {
     <div>
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div>
-          <h1 className="page-title">Mapa de talleres</h1>
-          <p className="page-subtitle">Ubicaciones registradas</p>
+          <h1 className="page-title">Mapa de talleres y almacenes</h1>
+          <p className="page-subtitle">Ubicaciones y rutas por calles</p>
         </div>
         {user?.role === 'ADMIN' && (
           <button
@@ -275,6 +344,55 @@ export default function MapaTalleres() {
         </div>
       )}
 
+      <div className="glass-panel map-route-planner">
+        <div className="map-route-planner-title">
+          <Navigation size={19} />
+          <div>
+            <strong>Ruta entre dos puntos</strong>
+            <span>Seleccione dos talleres, o un taller y un almacén.</span>
+          </div>
+        </div>
+        <label>
+          <span>Origen</span>
+          <select className="form-input form-select" value={routeOriginId} onChange={(event) => { setRouteOriginId(event.target.value); setCalculatedRoute(null); setRouteError(''); }}>
+            <option value="">Seleccionar origen</option>
+            <optgroup label="Talleres">
+              {workshops.map((point) => <option key={`origin-${point.id}`} value={point.id}>{point.nombre}</option>)}
+            </optgroup>
+            <optgroup label="Almacenes y puntos operativos">
+              {companyPoints.map((point) => <option key={`origin-${point.id}`} value={point.id}>{point.nombre}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <label>
+          <span>Destino</span>
+          <select className="form-input form-select" value={routeDestinationId} onChange={(event) => { setRouteDestinationId(event.target.value); setCalculatedRoute(null); setRouteError(''); }}>
+            <option value="">Seleccionar destino</option>
+            <optgroup label="Talleres">
+              {workshops.map((point) => <option key={`destination-${point.id}`} value={point.id}>{point.nombre}</option>)}
+            </optgroup>
+            <optgroup label="Almacenes y puntos operativos">
+              {companyPoints.map((point) => <option key={`destination-${point.id}`} value={point.id}>{point.nombre}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <div className="map-route-actions">
+          <button type="button" className="btn btn-primary" onClick={calculateRoute} disabled={!routeOriginId || !routeDestinationId || routeOriginId === routeDestinationId || routeLoading}>
+            <Navigation size={16} /> {routeLoading ? 'Calculando...' : 'Calcular ruta'}
+          </button>
+          {(routeOriginId || routeDestinationId) && (
+            <button type="button" className="btn btn-secondary" onClick={clearCalculatedRoute} disabled={routeLoading}>Limpiar</button>
+          )}
+        </div>
+        {routeError && <div className="map-route-message error" role="alert">{routeError}</div>}
+        {calculatedRoute && (
+          <div className="map-route-result" role="status">
+            <span><Ruler size={17} /><strong>{formatDistance(calculatedRoute.distancia_metros)}</strong> de recorrido</span>
+            <span><Clock3 size={17} /><strong>{formatDuration(calculatedRoute.duracion_segundos)}</strong> estimados</span>
+          </div>
+        )}
+      </div>
+
       {/* Route Filter Panel */}
       <div 
         className="filter-bar glass-panel" 
@@ -289,7 +407,7 @@ export default function MapaTalleres() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Navigation size={18} color="var(--primary)" style={{ transform: 'rotate(45deg)' }} />
-          <strong style={{ fontSize: '0.9rem' }}>Trazar Ruta de Visitas:</strong>
+          <strong style={{ fontSize: '0.9rem' }}>Ver recorrido histórico:</strong>
         </div>
 
         <select
@@ -372,6 +490,10 @@ export default function MapaTalleres() {
             <button type="button" className={mapLayer === 'street' ? 'active' : ''} onClick={() => selectMapLayer('street')} aria-pressed={mapLayer === 'street'}>Mapa</button>
             <button type="button" className={mapLayer === 'satellite' ? 'active' : ''} onClick={() => selectMapLayer('satellite')} aria-pressed={mapLayer === 'satellite'}>Satélite</button>
           </div>
+          <div className="map-point-legend" aria-label="Leyenda del mapa">
+            <span><i className="workshop" /> Taller</span>
+            <span><i className="warehouse" /> Almacén / punto operativo</span>
+          </div>
           <MapContainer 
             center={ECUADOR_CENTER} 
             zoom={DEFAULT_ZOOM} 
@@ -383,6 +505,7 @@ export default function MapaTalleres() {
               onSelect={handleMapWorkshopSelect}
             />
             <MapBaseLayer layer={mapLayer} onUnavailable={handleLayerUnavailable} />
+            <FitRouteBounds positions={routePositions} />
             {sectors.filter((sector) => sector.poligono_geojson).map((sector) => (
               <Polygon
                 key={`sector-${sector.id}`}
@@ -390,10 +513,11 @@ export default function MapaTalleres() {
                 pathOptions={{ color: sector.color, fillColor: sector.color, fillOpacity: 0.12, weight: 2 }}
               />
             ))}
-            {visibleWorkshops.map((taller) => {
+            {visiblePoints.map((taller) => {
               const lat = parseFloat(taller.latitud);
               const lng = parseFloat(taller.longitud);
-              const hasVisits = !!taller.fecha_visita;
+              const isWorkshop = taller.tipo === 'TALLER';
+              const hasVisits = isWorkshop && !!taller.fecha_visita;
 
               if (isNaN(lat) || isNaN(lng)) return null;
 
@@ -401,7 +525,7 @@ export default function MapaTalleres() {
                 <Marker 
                   key={taller.id} 
                   position={[lat, lng]} 
-                  icon={createWorkshopIcon(taller.sector, taller.sector_color)}
+                  icon={createPointIcon(taller.tipo)}
                 >
                   <Popup>
                     <div className="map-popup-card">
@@ -435,7 +559,7 @@ export default function MapaTalleres() {
                             <Eye size={12} />
                           </button>
                         </div>
-                      ) : (
+                      ) : isWorkshop ? (
                         <div 
                           className="map-popup-img" 
                           style={{ 
@@ -449,19 +573,27 @@ export default function MapaTalleres() {
                         >
                           <span>Sin fotos registradas</span>
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="map-popup-body">
                         <div className="map-popup-title">{taller.nombre}</div>
+                        <div className="map-popup-info" style={{ color: isWorkshop ? '#dc2626' : '#1d5596', fontWeight: 750 }}>
+                          {isWorkshop ? <MapPin size={12} /> : <Warehouse size={12} />}
+                          <span>{isWorkshop ? 'Taller' : taller.tipo === 'MATRIZ' ? 'Matriz' : taller.tipo === 'LOCAL' ? 'Local' : 'Almacén'}</span>
+                        </div>
 
-                        <div className="map-popup-info">
-                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getSectorColor(taller.sector), flexShrink: 0 }}></span>
-                          <span>Sector: {taller.sector || 'Sin sector'}</span>
-                        </div>
-                        <div className="map-popup-info">
-                          <User size={12} />
-                          <span>Responsable: {taller.vendedor_asignado_nombre || 'Sin asignar'}</span>
-                        </div>
+                        {isWorkshop && (
+                          <>
+                            <div className="map-popup-info">
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getSectorColor(taller.sector, taller.sector_color), flexShrink: 0 }}></span>
+                              <span>Sector: {taller.sector || 'Sin sector'}</span>
+                            </div>
+                            <div className="map-popup-info">
+                              <User size={12} />
+                              <span>Responsable: {taller.vendedor_asignado_nombre || 'Sin asignar'}</span>
+                            </div>
+                          </>
+                        )}
                         
                         {hasVisits ? (
                           <>
@@ -474,11 +606,11 @@ export default function MapaTalleres() {
                               <span>Vendedor: {taller.vendedor_nombre}</span>
                             </div>
                           </>
-                        ) : (
+                        ) : isWorkshop ? (
                           <div className="map-popup-info" style={{ color: 'var(--warning)' }}>
                             <span>Taller nuevo sin visitas</span>
                           </div>
-                        )}
+                        ) : null}
                         
                         <div className="map-popup-info" style={{ marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
                           <MapPin size={12} />
@@ -486,12 +618,23 @@ export default function MapaTalleres() {
                             {lat.toFixed(5)}, {lng.toFixed(5)}
                           </span>
                         </div>
+                        <div className="map-popup-route-actions">
+                          <button type="button" onClick={() => { setRouteOriginId(String(taller.id)); setCalculatedRoute(null); setRouteError(''); }}>Usar como origen</button>
+                          <button type="button" onClick={() => { setRouteDestinationId(String(taller.id)); setCalculatedRoute(null); setRouteError(''); }}>Usar como destino</button>
+                        </div>
                       </div>
                     </div>
                   </Popup>
                 </Marker>
               );
             })}
+
+            {routePositions.length > 1 && (
+              <Polyline
+                positions={routePositions}
+                pathOptions={{ color: '#2563eb', weight: 6, opacity: 0.9 }}
+              />
+            )}
 
             {(() => {
               const polylineCoords = routeVisits.map(v => [parseFloat(v.latitud), parseFloat(v.longitud)]).filter(coords => !isNaN(coords[0]) && !isNaN(coords[1]));

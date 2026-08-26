@@ -6,7 +6,12 @@ const { authenticateToken } = require('../middlewares/auth');
 // Protect all map routes
 router.use(authenticateToken);
 
-// GET /api/mapa/talleres
-router.get('/talleres', mapaController.getTalleresMapa);
+// GET /api/mapa/puntos
+router.get('/puntos', mapaController.getPuntosMapa);
+// Backward-compatible alias for older frontend builds.
+router.get('/talleres', mapaController.getPuntosMapa);
+
+// POST /api/mapa/ruta
+router.post('/ruta', mapaController.getRuta);
 
 module.exports = router;

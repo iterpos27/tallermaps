@@ -233,8 +233,15 @@ export const api = {
   },
   
   mapa: {
-    talleres: () => 
-      makeRequest('/mapa/talleres', { method: 'GET' })
+    puntos: () =>
+      makeRequest('/mapa/puntos', { method: 'GET' }),
+    talleres: () =>
+      makeRequest('/mapa/talleres', { method: 'GET' }),
+    ruta: (origen, destino) =>
+      makeRequest('/mapa/ruta', {
+        method: 'POST',
+        body: JSON.stringify({ origen, destino })
+      })
   },
 
   audit: {

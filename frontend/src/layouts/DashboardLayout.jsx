@@ -16,7 +16,7 @@ const adminGroups = [
     links: [
       { to: '/dashboard', label: 'Inicio', mobileLabel: 'Inicio', icon: Home },
       { to: '/programacion', label: 'Programación', mobileLabel: 'Agenda', icon: CalendarDays },
-      { to: '/mapa', label: 'Mapa Talleres', mobileLabel: 'Mapa', icon: Map },
+      { to: '/mapa', label: 'Mapa y rutas', mobileLabel: 'Mapa', icon: Map },
     ],
   },
   {
@@ -46,7 +46,7 @@ const vendedorLinks = [
   { to: '/registrar-visita', label: 'Registrar Visita', mobileLabel: 'Registrar', icon: PlusCircle, emphasis: true },
   { to: '/mis-visitas', label: 'Mis Visitas', mobileLabel: 'Visitas', icon: ClipboardList },
   { to: '/visitas-offline', label: 'Pendientes Offline', mobileLabel: 'Pendientes', icon: CloudOff },
-  { to: '/mapa', label: 'Mapa de Talleres', mobileLabel: 'Mapa', icon: Map },
+  { to: '/mapa', label: 'Mapa y rutas', mobileLabel: 'Mapa', icon: Map },
 ];
 
 const mensajeroLinks = [
