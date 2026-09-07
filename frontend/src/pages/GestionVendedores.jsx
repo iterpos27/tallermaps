@@ -237,12 +237,12 @@ export default function GestionVendedores() {
             <table className="premium-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Correo / Usuario</th>
-                  <th>Rol</th>
-                  <th>Sectores</th>
-                  <th>Estado</th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Correo / Usuario</th>
+                  <th scope="col">Rol</th>
+                  <th scope="col">Sectores</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -260,11 +260,6 @@ export default function GestionVendedores() {
                         )}
                       </td>
                       <td>
-                        {u.role === 'VENDEDOR' && u.sectores?.length > 0
-                          ? <div className="sector-tag-list">{u.sectores.map((sector) => <span key={sector} className="sector-tag">{sector}</span>)}</div>
-                          : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sin asignación</span>}
-                      </td>
-                      <td>
                         <span 
                           style={{ 
                             fontSize: '0.72rem', 
@@ -277,6 +272,11 @@ export default function GestionVendedores() {
                         >
                           {u.role}
                         </span>
+                      </td>
+                      <td>
+                        {u.role === 'VENDEDOR' && u.sectores?.length > 0
+                          ? <div className="sector-tag-list">{u.sectores.map((sector) => <span key={sector} className="sector-tag">{sector}</span>)}</div>
+                          : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sin asignación</span>}
                       </td>
                       <td>
                         <span 
@@ -293,34 +293,39 @@ export default function GestionVendedores() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                           <button
+                            type="button"
                             onClick={() => handleEditClick(u)}
                             className="btn btn-secondary"
-                            style={{ padding: '6px 12px', fontSize: '0.75rem', width: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ padding: 0, width: '40px', height: '40px', flexShrink: 0, justifyContent: 'center' }}
                             title="Editar usuario"
+                            aria-label={`Editar usuario ${u.name}`}
                           >
-                            <Edit size={12} />
-                            <span>Editar</span>
+                            <Edit size={17} aria-hidden="true" />
                           </button>
                           
                           <button
+                            type="button"
                             onClick={() => handlePasswordResetClick(u)}
                             className="btn btn-secondary"
-                            style={{ padding: '6px 12px', fontSize: '0.75rem', width: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ padding: 0, width: '40px', height: '40px', flexShrink: 0, justifyContent: 'center' }}
                             title="Cambiar contraseña"
+                            aria-label={`Cambiar contraseña de ${u.name}`}
                           >
-                            <Lock size={12} />
-                            <span>Clave</span>
+                            <Lock size={17} aria-hidden="true" />
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => handleToggleStatus(u)}
                             className="btn"
                             style={{ 
-                              padding: '6px 12px', 
-                              fontSize: '0.75rem', 
-                              width: 'auto', 
+                              padding: 0,
+                              width: '40px',
+                              height: '40px',
+                              flexShrink: 0,
+                              justifyContent: 'center',
                               display: 'flex', 
                               alignItems: 'center', 
                               gap: '4px',
@@ -329,9 +334,9 @@ export default function GestionVendedores() {
                               border: isActive ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'
                             }}
                             title={isActive ? "Desactivar acceso" : "Activar acceso"}
+                            aria-label={`${isActive ? 'Desactivar' : 'Activar'} acceso de ${u.name}`}
                           >
-                            <Power size={12} />
-                            <span>{isActive ? 'Desactivar' : 'Activar'}</span>
+                            <Power size={17} aria-hidden="true" />
                           </button>
                         </div>
                       </td>
