@@ -1,3 +1,4 @@
+const { validateInput, validateId } = require('../middlewares/validateInput');
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
@@ -5,6 +6,8 @@ const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 
 // Protect all user routes, only allow ADMIN
 router.use(authenticateToken);
+router.use(validateInput);
+router.param('id', validateId);
 router.use(authorizeRoles('ADMIN'));
 
 // GET /api/users

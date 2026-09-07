@@ -34,11 +34,11 @@ export default function ControlEntregas() {
             <thead><tr><th>Mensajero</th><th>Origen</th><th>Destino</th><th>Salida</th><th>Llegada</th><th>Tiempo</th><th>Estado</th></tr></thead>
             <tbody>
               {deliveries.map((delivery) => <tr key={delivery.id}>
-                <td>{delivery.mensajero_nombre}</td><td>{delivery.origen_nombre}</td><td>{delivery.destino_nombre || 'En ruta'}</td>
+                <td>{delivery.mensajero_nombre}</td><td>{delivery.origen_nombre}</td><td>{delivery.destino_nombre || (delivery.estado === 'CANCELADA' ? 'Cancelada' : 'En ruta')}</td>
                 <td>{new Date(delivery.salida_at).toLocaleString('es-EC')}</td>
                 <td>{delivery.llegada_at ? new Date(delivery.llegada_at).toLocaleString('es-EC') : '—'}</td>
                 <td><Clock size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }} />{formatDuration(delivery.duracion_segundos)}</td>
-                <td><strong style={{ color: delivery.estado === 'ENTREGADA' ? '#10b981' : 'var(--primary)' }}>{delivery.estado}</strong></td>
+                <td><strong style={{ color: delivery.estado === 'ENTREGADA' ? '#10b981' : 'var(--primary)' }}>{delivery.estado}</strong>{delivery.motivo_cancelacion && <p>{delivery.motivo_cancelacion}</p>}</td>
               </tr>)}
               {deliveries.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No hay recorridos registrados.</td></tr>}
             </tbody>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import Modal from './Modal';
 
@@ -14,6 +14,13 @@ export default function MapWorkshopForm({
   onClose,
   onSubmit
 }) {
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+      errorRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [error]);
   if (!position) return null;
 
   return (
@@ -22,14 +29,14 @@ export default function MapWorkshopForm({
         <div className="modal-heading-row">
           <div>
             <h3 id="new-map-workshop-title" className="modal-title">Nuevo taller</h3>
-            <p className="modal-subtitle">Ubicación seleccionada desde el mapa</p>
+            <p className="modal-subtitle">Ubicación seleccionada desde el mapa. Debe estar a más de 50 metros de otro taller registrado.</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose} disabled={saving} aria-label="Cerrar">
             <X size={20} />
           </button>
         </div>
 
-        {error && <div className="alert alert-danger" style={{ marginBottom: '16px' }}>{error}</div>}
+        {error && <div ref={errorRef} role="alert" tabIndex={-1} className="alert alert-danger" style={{ marginBottom: '16px' }}>{error}</div>}
 
         <div className="form-group">
           <label className="form-label" htmlFor="new-map-workshop-name">Nombre del taller</label>

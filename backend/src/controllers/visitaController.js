@@ -1,13 +1,6 @@
 const db = require('../db');
-const {
-  isValidLatitude,
-  isValidLongitude,
-  isValidObservation,
-  MIN_OBSERVATION_LENGTH
-} = require('../utils/validation');
 const { storageService } = require('../services/storage');
 const { logActivity } = require('../services/audit');
-const { sellerCanAccessWorkshop } = require('../services/sectorAccess');
 
 const normalizeVisitDateTime = (date, time) => {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
@@ -37,7 +30,7 @@ const getVisitas = async (req, res) => {
         v.foto_url,
         v.latitud,
         v.longitud,
-        v.fecha_visita,
+        COALESCE(v.captured_at, v.fecha_visita::timestamptz) AS fecha_visita,
         v.created_at,
         v.observacion,
         v.programacion_id,
@@ -79,13 +72,13 @@ const getVisitas = async (req, res) => {
 
     // Filter by date range (fecha_inicio / fecha_fin)
     if (fecha_inicio) {
-      queryText += ` AND v.fecha_visita >= $${paramIndex}`;
-      queryParams.push(new Date(fecha_inicio + 'T00:00:00'));
+      queryText += ` AND v.fecha_visita >= $${paramIndex}::date`;
+      queryParams.push(fecha_inicio);
       paramIndex++;
     }
     if (fecha_fin) {
-      queryText += ` AND v.fecha_visita <= $${paramIndex}`;
-      queryParams.push(new Date(fecha_fin + 'T23:59:59'));
+      queryText += ` AND v.fecha_visita < ($${paramIndex}::date + INTERVAL '1 day')`;
+      queryParams.push(fecha_fin);
       paramIndex++;
     }
 
@@ -116,7 +109,7 @@ const getVisitaById = async (req, res) => {
         v.foto_url,
         v.latitud,
         v.longitud,
-        v.fecha_visita,
+        COALESCE(v.captured_at, v.fecha_visita::timestamptz) AS fecha_visita,
         v.created_at,
         v.observacion,
         v.programacion_id,
@@ -172,7 +165,7 @@ const updateVisitaDateTime = async (req, res) => {
     const params = [normalizedDateTime, id];
     let queryText = `
       UPDATE visitas
-      SET fecha_visita = $1
+      SET fecha_visita = $1::timestamp, captured_at = $1::timestamp AT TIME ZONE 'America/Guayaquil'
       WHERE id = $2
     `;
 
@@ -181,7 +174,7 @@ const updateVisitaDateTime = async (req, res) => {
       params.push(req.user.id);
     }
 
-    queryText += ' RETURNING id, taller_id, vendedor_id, fecha_visita, fuera_rango';
+    queryText += ' RETURNING id, taller_id, vendedor_id, captured_at AS fecha_visita, fuera_rango';
     const result = await db.query(queryText, params);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Visita no encontrada o sin permisos para editarla.' });
@@ -205,211 +198,10 @@ const updateVisitaDateTime = async (req, res) => {
   }
 };
 
-function getDistanceInMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371e3; // Earth radius in meters
-  const phi1 = parseFloat(lat1) * Math.PI / 180;
-  const phi2 = parseFloat(lat2) * Math.PI / 180;
-  const deltaPhi = (parseFloat(lat2) - parseFloat(lat1)) * Math.PI / 180;
-  const deltaLambda = (parseFloat(lon2) - parseFloat(lon1)) * Math.PI / 180;
-
-  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-            Math.cos(phi1) * Math.cos(phi2) *
-            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c; // in meters
-}
+const createVisita = require('./registerVisit');
 
 /**
- * Create a new visit
- */
-const createVisita = async (req, res) => {
-  const vendedor_id = req.user.id;
-  const { taller_id, taller_nombre, latitud, longitud, observacion, programacion_id } = req.body;
-  const file = req.file;
-
-  // Validation
-  if (!file) {
-    return res.status(400).json({ error: 'La foto de la visita es requerida.' });
-  }
-
-  if (!isValidObservation(observacion)) {
-    await storageService.deleteFile(`/uploads/${file.filename}`);
-    return res.status(400).json({
-      error: `Las observaciones son obligatorias y deben tener al menos ${MIN_OBSERVATION_LENGTH} caracteres.`
-    });
-  }
-
-  if (!isValidLatitude(latitud) || !isValidLongitude(longitud)) {
-    // If upload fails in client, delete file to clean up
-    if (file) await storageService.deleteFile(`/uploads/${file.filename}`);
-    return res.status(400).json({ error: 'Las coordenadas GPS no son válidas.' });
-  }
-
-  try {
-    let resolvedTallerId = null;
-    let resolvedProgramacionId = programacion_id || null;
-
-    if (taller_id) {
-      // Check if workshop exists
-      const tallerCheck = await db.query(
-        `SELECT t.id
-         FROM talleres t
-         JOIN vendedor_sectores vs ON vs.sector_id = t.sector_id
-         JOIN sectores s ON s.id = vs.sector_id AND s.is_active = TRUE
-         WHERE t.id = $1 AND t.is_active = TRUE AND vs.vendedor_id = $2`,
-        [taller_id, vendedor_id]
-      );
-      if (tallerCheck.rows.length === 0) {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(403).json({ error: 'El taller no pertenece a uno de sus sectores.' });
-      }
-      resolvedTallerId = taller_id;
-    } else if (taller_nombre && taller_nombre.trim() !== '') {
-      const trimmedName = taller_nombre.trim();
-      // Check if a workshop with the same name already exists
-      const nameCheck = await db.query('SELECT id FROM talleres WHERE LOWER(nombre) = LOWER($1)', [trimmedName]);
-      
-      if (nameCheck.rows.length > 0) {
-        resolvedTallerId = nameCheck.rows[0].id;
-        if (!await sellerCanAccessWorkshop(db, vendedor_id, resolvedTallerId)) {
-          await storageService.deleteFile(`/uploads/${file.filename}`);
-          return res.status(403).json({ error: 'Ya existe un taller con ese nombre fuera de sus sectores.' });
-        }
-      } else {
-        // New workshops remain unclassified until an administrator assigns a sector.
-        const newTallerResult = await db.query(
-          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id`,
-          [trimmedName, latitud, longitud, vendedor_id]
-        );
-        resolvedTallerId = newTallerResult.rows[0].id;
-      }
-    } else {
-      await storageService.deleteFile(`/uploads/${file.filename}`);
-      return res.status(400).json({ error: 'Debe proporcionar un ID de taller o un nombre de taller nuevo.' });
-    }
-
-    if (resolvedProgramacionId) {
-      const programacionCheck = await db.query(
-        `SELECT id, taller_id, vendedor_id, estado
-         FROM programaciones_visita
-         WHERE id = $1`,
-        [resolvedProgramacionId]
-      );
-
-      if (programacionCheck.rows.length === 0) {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(400).json({ error: 'La programacion seleccionada no existe.' });
-      }
-
-      const programacion = programacionCheck.rows[0];
-      if (Number(programacion.vendedor_id) !== Number(vendedor_id)) {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(403).json({ error: 'La programacion seleccionada pertenece a otro vendedor.' });
-      }
-
-      if (Number(programacion.taller_id) !== Number(resolvedTallerId)) {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(400).json({ error: 'La programacion seleccionada no corresponde al taller elegido.' });
-      }
-
-      if (programacion.estado === 'CANCELADA') {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-        return res.status(400).json({ error: 'La programacion seleccionada esta cancelada.' });
-      }
-    } else {
-      const today = new Date().toISOString().split('T')[0];
-      const autoMatch = await db.query(
-        `SELECT id
-         FROM programaciones_visita
-         WHERE taller_id = $1
-           AND vendedor_id = $2
-           AND fecha_programada = $3
-           AND estado = 'PENDIENTE'
-         ORDER BY created_at ASC
-         LIMIT 1`,
-        [resolvedTallerId, vendedor_id, today]
-      );
-      if (autoMatch.rows.length > 0) {
-        resolvedProgramacionId = autoMatch.rows[0].id;
-      }
-    }
-
-    // Save image to storage service
-    const foto_url = await storageService.saveFile(file, req);
-
-    // Calculate geofencing distance if it's an existing workshop
-    let fueraRango = false;
-    let distanciaMetros = 0;
-
-    if (taller_id) {
-      const tallerCheck = await db.query('SELECT latitud, longitud FROM talleres WHERE id = $1 AND is_active = TRUE', [taller_id]);
-      if (tallerCheck.rows.length > 0 && tallerCheck.rows[0].latitud && tallerCheck.rows[0].longitud) {
-        const tLat = parseFloat(tallerCheck.rows[0].latitud);
-        const tLng = parseFloat(tallerCheck.rows[0].longitud);
-        const vLat = parseFloat(latitud);
-        const vLng = parseFloat(longitud);
-        
-        if (!isNaN(tLat) && !isNaN(tLng) && !isNaN(vLat) && !isNaN(vLng)) {
-          distanciaMetros = getDistanceInMeters(tLat, tLng, vLat, vLng);
-          if (distanciaMetros > 100) {
-            fueraRango = true;
-          }
-        }
-      }
-    }
-
-    // Insert visit
-    const result = await db.query(
-      `INSERT INTO visitas (taller_id, vendedor_id, programacion_id, foto_url, latitud, longitud, observacion, fuera_rango, distancia_metros) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-       RETURNING id, taller_id, vendedor_id, programacion_id, foto_url, latitud, longitud, observacion, fecha_visita, fuera_rango, distancia_metros`,
-      [
-        resolvedTallerId,
-        vendedor_id,
-        resolvedProgramacionId,
-        foto_url,
-        latitud,
-        longitud,
-        observacion.trim(),
-        fueraRango,
-        distanciaMetros
-      ]
-    );
-
-    if (resolvedProgramacionId) {
-      await db.query(
-        `UPDATE programaciones_visita
-         SET estado = 'EJECUTADA', visita_id = $1, finalizada_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [result.rows[0].id, resolvedProgramacionId]
-      );
-    }
-
-    return res.status(201).json({
-      message: 'Visita registrada exitosamente.',
-      visita: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Error creating visit:', error);
-    // Cleanup photo in case of DB insert error
-    if (file) {
-      try {
-        await storageService.deleteFile(`/uploads/${file.filename}`);
-      } catch (err) {
-        console.error('Failed to cleanup file:', err);
-      }
-    }
-    if (error.message.includes('sector')) return res.status(403).json({ error: error.message });
-    return res.status(500).json({ error: 'Error al registrar la visita en el servidor.' });
-  }
-};
-
-/**
- * Permanently delete a visit. The route restricts this operation to ADMIN users.
+ * Permanently delete a visit. Sellers can delete only their own visits.
  * If the visit completed a schedule, that schedule becomes pending again.
  */
 const deleteVisita = async (req, res) => {
@@ -449,8 +241,8 @@ const deleteVisita = async (req, res) => {
       `UPDATE programaciones_visita
        SET estado = 'PENDIENTE', visita_id = NULL, iniciada_at = NULL, finalizada_at = NULL,
            motivo_fallo = NULL, updated_at = CURRENT_TIMESTAMP
-       WHERE visita_id = $1 OR id = $2`,
-      [id, visita.programacion_id]
+       WHERE visita_id = $1`,
+      [id]
     );
     await client.query('DELETE FROM visitas WHERE id = $1', [id]);
     await logActivity({

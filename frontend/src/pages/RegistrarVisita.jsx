@@ -1,7 +1,8 @@
+import { businessDate } from '../utils/date';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, X } from 'lucide-react';
-import { api, offlineStorage } from '../api/api';
+import { api, offlineStorage, getUser } from '../api/api';
 import { compressImage } from '../utils/image';
 
 const MIN_OBSERVATION_LENGTH = 10;
@@ -37,6 +38,7 @@ export default function RegistrarVisita() {
 
   // Ref for the native mobile camera input
   const fileInputRef = useRef(null);
+  const requestRef = useRef(null);
 
   // Fetch workshops and fetch GPS coords on mount
   useEffect(() => {
@@ -75,12 +77,12 @@ export default function RegistrarVisita() {
 
   const fetchProgramaciones = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = businessDate();
       const future = new Date();
       future.setDate(future.getDate() + 14);
       const data = await api.programaciones.list({
         fecha_inicio: today,
-        fecha_fin: future.toISOString().split('T')[0]
+        fecha_fin: businessDate(future)
       });
       const activeSchedules = data.filter((item) => ['PENDIENTE', 'EN_CAMINO', 'INICIADA'].includes(item.estado));
       setProgramaciones(activeSchedules);
@@ -210,7 +212,14 @@ export default function RegistrarVisita() {
     setLoading(true);
 
     try {
+      if (!requestRef.current) requestRef.current = {
+        id: `visit-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+        captured_at: new Date().toISOString(), owner_id: getUser()?.id
+      };
       const formData = new FormData();
+      formData.append('client_request_id', requestRef.current.id);
+      formData.append('captured_at', requestRef.current.captured_at);
+      formData.append('owner_id', requestRef.current.owner_id);
       if (tallerMode === 'existente') {
         formData.append('taller_id', selectedTallerId);
       } else {
@@ -225,7 +234,17 @@ export default function RegistrarVisita() {
       }
       formData.append('foto', photoFile);
 
+      // Persist before sending: a closed tab or lost response must not lose the operation ID.
+      await offlineStorage.savePendingVisit({
+        ...requestRef.current,
+        taller_id: tallerMode === 'existente' ? selectedTallerId : null,
+        taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
+        latitud: coords.latitude, longitud: coords.longitude, observacion: observacion.trim(),
+        programacion_id: selectedProgramacionId || null, photoBlob: photoFile,
+        nextRetryAt: new Date(Date.now() + 60000).toISOString()
+      });
       await api.visitas.create(formData);
+      await offlineStorage.removePendingVisit(requestRef.current.id);
       setSuccess('¡Visita registrada exitosamente!');
       
       // Redirect after 2s
@@ -236,9 +255,10 @@ export default function RegistrarVisita() {
     } catch (err) {
       console.error('Submit error:', err);
       // Fallback to offline mode if offline or request failed
-      if (!navigator.onLine || err.message === 'Failed to fetch' || err.message.toLowerCase().includes('network')) {
+      if (!navigator.onLine || !err.status || err.status >= 500) {
         try {
           await offlineStorage.savePendingVisit({
+            ...requestRef.current,
             taller_id: tallerMode === 'existente' ? selectedTallerId : null,
             taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
             latitud: coords.latitude,
@@ -257,6 +277,9 @@ export default function RegistrarVisita() {
           setLoading(false);
         }
       } else {
+        if (requestRef.current && [400, 403, 404, 409, 413, 422].includes(err.status)) {
+          await offlineStorage.markRejected(requestRef.current.id, err.message).catch(() => {});
+        }
         setError(err.message || 'Error al registrar la visita.');
         setLoading(false);
       }
@@ -389,7 +412,7 @@ export default function RegistrarVisita() {
                 disabled={loading}
               />
               <p className="field-help" style={{ marginTop: '8px' }}>
-                El administrador asignará el sector después de registrar la visita.
+                No se permite crear otro taller a 50 metros o menos de uno registrado. El administrador asignará el sector después de registrar la visita.
               </p>
               {suggestions.length > 0 && (
                 <div 

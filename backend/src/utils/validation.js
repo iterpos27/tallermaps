@@ -10,9 +10,20 @@ const isValidEmail = (value) => {
 };
 
 const isValidCoordinate = (value, min, max) => {
+  if (!['number', 'string'].includes(typeof value) || (typeof value === 'string' && !value.trim())) return false;
   const number = Number(value);
   return Number.isFinite(number) && number >= min && number <= max;
 };
+
+const normalizeDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+};
+
+const businessDate = (value = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Guayaquil', year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(value);
 
 const isValidLatitude = (value) => isValidCoordinate(value, -90, 90);
 const isValidLongitude = (value) => isValidCoordinate(value, -180, 180);
@@ -33,6 +44,8 @@ const validatePassword = (password) => {
 };
 
 module.exports = {
+  normalizeDate,
+  businessDate,
   isNonEmptyString,
   normalizeEmail,
   isValidEmail,

@@ -6,16 +6,19 @@ const { createVisita } = require('../src/controllers/visitaController');
 
 test('un vendedor registra una visita con taller nuevo sin seleccionar sector', async (context) => {
   const originalQuery = db.query;
+  const originalConnect = db.pool.connect;
   const originalSaveFile = storageService.saveFile;
   const executedQueries = [];
 
   context.after(() => {
     db.query = originalQuery;
+    db.pool.connect = originalConnect;
     storageService.saveFile = originalSaveFile;
   });
 
   db.query = async (sql, params = []) => {
     executedQueries.push({ sql, params });
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.includes('pg_advisory_xact_lock') || sql.includes('client_request_id') && sql.startsWith('SELECT') || sql.includes('latitud BETWEEN')) return { rows: [] };
 
     if (sql.includes('SELECT id FROM talleres WHERE LOWER(nombre)')) return { rows: [] };
     if (sql.includes('INSERT INTO talleres')) return { rows: [{ id: 81 }] };
@@ -34,6 +37,7 @@ test('un vendedor registra una visita con taller nuevo sin seleccionar sector', 
     throw new Error(`Consulta inesperada en la prueba: ${sql}`);
   };
   storageService.saveFile = async () => '/uploads/prueba.jpg';
+  db.pool.connect = async () => ({ query: db.query, release() {} });
 
   const response = {
     statusCode: 200,
@@ -51,6 +55,8 @@ test('un vendedor registra una visita con taller nuevo sin seleccionar sector', 
   await createVisita({
     user: { id: 12, role: 'VENDEDOR' },
     body: {
+      owner_id: 12,
+      client_request_id: 'test-request-123',
       taller_nombre: 'Taller nuevo sin clasificar',
       latitud: '-1.0577',
       longitud: '-80.4558',

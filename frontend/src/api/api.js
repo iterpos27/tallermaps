@@ -262,6 +262,7 @@ export const api = {
   },
 
   entregas: {
+    cancel: (motivo) => makeRequest('/entregas/cancel', { method: 'POST', body: JSON.stringify({ motivo }) }),
     position: ({ latitud, longitud, accuracy }) =>
       makeRequest('/entregas/position', {
         method: 'POST',
@@ -280,12 +281,45 @@ export const api = {
 /**
  * Offline Mode Caching and Sync Utilities
  */
+let syncPromise = null;
 export const offlineStorage = {
-  getPendingVisits: getPendingOfflineVisits,
-  savePendingVisit: savePendingOfflineVisit,
-  removePendingVisit: removePendingOfflineVisit,
+  getUnassignedCount: async () => (await getPendingOfflineVisits()).filter(visit => !visit.owner_id).length,
+  getPendingVisits: async () => {
+    const user = getUser();
+    if (!user || user.role !== 'VENDEDOR') return [];
+    return (await getPendingOfflineVisits()).filter((visit) => Number(visit.owner_id) === Number(user.id));
+  },
+  savePendingVisit: async (visit) => {
+    const user = getUser();
+    if (!user || user.role !== 'VENDEDOR' || (visit.owner_id && Number(visit.owner_id) !== Number(user.id))) throw new Error('La visita pertenece a otra sesión.');
+    return savePendingOfflineVisit({ ...visit, owner_id: user.id });
+  },
+  removePendingVisit: async (id) => {
+    const visit = (await offlineStorage.getPendingVisits()).find((item) => item.id === id);
+    if (!visit) return;
+    return removePendingOfflineVisit(id);
+  },
+  updatePendingVisit: async (visit) => {
+    const current = (await offlineStorage.getPendingVisits()).find((item) => item.id === visit.id);
+    if (!current || !['needs_attention'].includes(current.status)) throw new Error('Solo se pueden corregir visitas rechazadas por el servidor.');
+    return updatePendingOfflineVisit({ ...current, taller_id: visit.taller_id || null,
+      taller_nombre: visit.taller_nombre, observacion: visit.observacion, programacion_id: visit.programacion_id || null,
+      status: 'pending', lastError: '', nextRetryAt: null });
+  },
+  markRejected: async (id, message) => {
+    const visit = (await offlineStorage.getPendingVisits()).find(item => item.id === id);
+    if (visit) await updatePendingOfflineVisit({ ...visit, status: 'needs_attention', lastError: message });
+  },
 
-  syncPendingVisits: async (onProgress, { force = false } = {}) => {
+  syncPendingVisits: (onProgress, options = {}) => {
+    if (!syncPromise) {
+      const run = () => offlineStorage.runSyncPendingVisits(onProgress, options);
+      syncPromise = (navigator.locks ? navigator.locks.request('taller-visits-sync', run) : run())
+        .finally(() => { syncPromise = null; });
+    }
+    return syncPromise;
+  },
+  runSyncPendingVisits: async (onProgress, { force = false } = {}) => {
     const pending = await offlineStorage.getPendingVisits();
     if (pending.length === 0) return { syncedCount: 0, conflictCount: 0 };
 
@@ -294,6 +328,8 @@ export const offlineStorage = {
     let deferredCount = 0;
 
     for (const visit of pending) {
+      if (Number(getUser()?.id) !== Number(visit.owner_id)) break;
+      if (visit.status === 'needs_attention' && !force) { conflictCount++; continue; }
       if (!force && visit.nextRetryAt && new Date(visit.nextRetryAt).getTime() > Date.now()) {
         deferredCount++;
         continue;
@@ -310,6 +346,9 @@ export const offlineStorage = {
         const file = new File([blob], `visita-offline-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
 
         const formData = new FormData();
+        formData.append('client_request_id', visit.id);
+        formData.append('owner_id', visit.owner_id);
+        formData.append('captured_at', visit.captured_at || visit.queuedAt);
         if (visit.taller_id) {
           formData.append('taller_id', visit.taller_id);
         } else {
@@ -334,7 +373,8 @@ export const offlineStorage = {
         syncedCount++;
       } catch (err) {
         console.error('Error syncing visit:', visit, err);
-        const isConflict = [400, 404, 409].includes(err.status);
+        if (err.status === 401) break;
+        const isConflict = [400, 403, 404, 409, 413, 422].includes(err.status);
         const attempts = (visit.attempts || 0) + 1;
         const retryDelayMinutes = Math.min(30, 2 ** Math.min(attempts, 5));
         await updatePendingOfflineVisit({

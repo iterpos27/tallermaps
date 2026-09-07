@@ -63,7 +63,8 @@ const login = async (req, res) => {
         name: user.name, 
         email: user.email, 
         username: user.username,
-        role: user.role 
+        role: user.role,
+        session_version: user.session_version
       },
       JWT_SECRET,
       { expiresIn: '24h' }

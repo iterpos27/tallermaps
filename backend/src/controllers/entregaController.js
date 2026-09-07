@@ -1,6 +1,7 @@
 const db = require('../db');
 const { isValidLatitude, isValidLongitude } = require('../utils/validation');
 const { logActivity } = require('../services/audit');
+const { transaction, rejectRequest } = require('../services/transactions');
 
 const ORIGIN_TYPES = new Set(['MATRIZ', 'LOCAL', 'ALMACEN']);
 const MAX_GPS_ACCURACY_METERS = Number(process.env.MAX_GPS_ACCURACY_METERS || 150);
@@ -17,6 +18,8 @@ function distanceInMeters(lat1, lon1, lat2, lon2) {
 }
 
 function parsePosition(body) {
+  if (!isValidLatitude(body.latitud) || !isValidLongitude(body.longitud)
+    || typeof body.accuracy !== 'number' || !Number.isFinite(body.accuracy) || body.accuracy <= 0) return null;
   const latitud = Number(body.latitud);
   const longitud = Number(body.longitud);
   const accuracy = body.accuracy == null ? null : Number(body.accuracy);
@@ -49,10 +52,12 @@ function nearestPointWithinGeofence(points, position, predicate = () => true) {
 const registerPosition = async (req, res) => {
   const position = parsePosition(req.body);
   if (!position) return res.status(400).json({ error: 'La posicion GPS no es valida.' });
+  if (position.accuracy > MAX_GPS_ACCURACY_METERS) return res.status(400).json({ error: 'La precisión del GPS es insuficiente. Espere una mejor señal.' });
 
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(74004, $1::integer)', [req.user.id]);
     const points = await getActivePoints(client);
     const origin = nearestPointWithinGeofence(
       points,
@@ -134,6 +139,7 @@ const completeDelivery = async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(74004, $1::integer)', [req.user.id]);
     const activeResult = await client.query(
       `SELECT r.id, r.origen_id, r.salida_at, o.nombre AS origen_nombre
        FROM entregas_recorridos r
@@ -226,9 +232,9 @@ const completeDelivery = async (req, res) => {
 const getStatus = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT r.id, r.estado, r.salida_at, r.llegada_at,
+      `SELECT r.id, r.estado, r.salida_at, r.llegada_at, r.motivo_cancelacion,
               o.nombre AS origen_nombre, d.nombre AS destino_nombre,
-              CASE WHEN r.estado = 'ENTREGADA'
+              CASE WHEN r.estado IN ('ENTREGADA', 'CANCELADA')
                 THEN EXTRACT(EPOCH FROM (r.llegada_at - r.salida_at))::INTEGER
                 ELSE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - r.salida_at))::INTEGER
               END AS duracion_segundos
@@ -251,7 +257,7 @@ const getStatus = async (req, res) => {
 const listDeliveries = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT r.id, r.estado, r.salida_at, r.llegada_at,
+      `SELECT r.id, r.estado, r.salida_at, r.llegada_at, r.motivo_cancelacion,
               EXTRACT(EPOCH FROM (COALESCE(r.llegada_at, CURRENT_TIMESTAMP) - r.salida_at))::INTEGER AS duracion_segundos,
               r.distancia_destino_metros, r.precision_llegada_metros,
               u.name AS mensajero_nombre,
@@ -270,7 +276,26 @@ const listDeliveries = async (req, res) => {
   }
 };
 
+const cancelDelivery = async (req, res) => {
+  const { motivo } = req.body;
+  if (typeof motivo !== 'string' || motivo.trim().length < 5 || motivo.length > 1000) return res.status(400).json({ error: 'Ingrese un motivo de entre 5 y 1000 caracteres.' });
+  try {
+    await transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(74004, $1::integer)', [req.user.id]);
+      const result = await client.query(
+        `UPDATE entregas_recorridos SET estado = 'CANCELADA', llegada_at = CURRENT_TIMESTAMP, motivo_cancelacion = $2
+         WHERE mensajero_id = $1 AND estado = 'EN_RUTA' RETURNING id`, [req.user.id, motivo.trim()]
+      );
+      if (!result.rows.length) throw rejectRequest(409, 'No hay un recorrido activo para cancelar.');
+      await client.query('UPDATE messenger_tracking_state SET inside_point_id = NULL WHERE user_id = $1', [req.user.id]);
+      await logActivity({ req, action: 'ENTREGA_CANCELADA', entityType: 'entrega', entityId: result.rows[0].id, details: { motivo: motivo.trim() }, client });
+    });
+    return res.json({ message: 'Recorrido cancelado. La incidencia quedó registrada.' });
+  } catch (error) { return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo cancelar el recorrido.' }); }
+};
+
 module.exports = {
+  cancelDelivery,
   registerPosition,
   completeDelivery,
   getStatus,

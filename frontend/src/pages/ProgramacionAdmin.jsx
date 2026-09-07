@@ -1,8 +1,9 @@
+import { businessDate } from '../utils/date';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle, ClipboardList, Download, Search } from 'lucide-react';
 import { api } from '../api/api';
 
-const toDateInput = (date) => date.toISOString().split('T')[0];
+const toDateInput = (date) => businessDate(date);
 
 const getCurrentWeekRange = () => {
   const now = new Date();

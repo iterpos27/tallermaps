@@ -200,6 +200,21 @@ Los talleres nuevos registrados durante una visita quedan inicialmente **sin sec
 - La cola registra reintentos y conserva los conflictos para revisión sin perder datos.
 - El mapa agrupa talleres automáticamente según el nivel de zoom y permite buscarlos por nombre.
 
+### Validación de talleres y visitas
+
+- No se permite crear un taller a **50 metros o menos** de otro taller registrado, incluso si pertenece a otro sector o está archivado. En este último caso se debe restaurar el registro original. Esta regla también se aplica al cambiar la ubicación de un taller y al registrar talleres desde visitas o entregas; no afecta a Matriz, locales o almacenes.
+- El control de duplicados se realiza en el servidor y protege las solicitudes simultáneas. Los duplicados históricos no se eliminan automáticamente.
+- El vendedor asignado puede acceder al taller sin sector hasta que el administrador lo clasifique. Después se aplican los permisos del sector.
+- Las visitas se guardan en el dispositivo antes del envío, con propietario, identificador único y hora de captura. Un reintento no crea otra visita. La fecha comercial corresponde a Ecuador y la hora de captura también se conserva con zona horaria.
+- La pantalla de pendientes permite corregir rechazos. Las visitas antiguas sin propietario se conservan sin sincronizar automáticamente para evitar atribuirlas a otra persona.
+- Desactivar un usuario, cambiar su rol o restablecer su contraseña invalida sus sesiones anteriores. Se impide desactivar o cambiar de rol al último administrador activo.
+- No se permite consumir otra vez una programación ejecutada ni reactivar una cancelada si su horario se cruza con otra visita.
+- El mensajero puede cancelar un recorrido por incidencia, indicando un motivo que queda en el historial y en Actividad. El seguimiento y la confirmación exigen precisión GPS válida.
+
+La migración `002_functional_validation` se aplica automáticamente al iniciar el backend. También puede ejecutarse con `npm run migrate --prefix backend`. Al actualizar, recargue las páginas abiertas para que envíen los nuevos identificadores de visitas.
+
+Las pruebas integradas usan exclusivamente PostgreSQL local en una base de pruebas. Para ejecutarlas, configure `QA_PG_PORT` con el puerto de esa instancia y ejecute `npm run check`; crean y eliminan un esquema aislado. Sin esa variable se ejecutan las pruebas unitarias y de la cola offline, y la prueba integrada queda omitida.
+
 ## Control de entregas por geocerca
 
 - El administrador puede crear usuarios con rol `MENSAJERO` y configurar puntos internos como `MATRIZ`, `LOCAL` o `ALMACEN` con un radio entre 20 y 1000 metros. Los talleres los registra normalmente el vendedor y, como alternativa, el mensajero al confirmar una entrega en un destino nuevo.

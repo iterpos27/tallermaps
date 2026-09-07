@@ -3,8 +3,8 @@ import { TileLayer } from 'react-leaflet';
 
 const LAYERS = {
   street: {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
   },
   satellite: {
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
@@ -25,6 +25,7 @@ export default function MapBaseLayer({ layer, onUnavailable }) {
       key={layer}
       attribution={selectedLayer.attribution}
       url={selectedLayer.url}
+      referrerPolicy="strict-origin-when-cross-origin"
       eventHandlers={{
         tileload: () => { failedTiles.current = 0; },
         tileerror: () => {

@@ -89,7 +89,8 @@ export default function SectorMapEditor({ value, color, workshops = [], analysis
         <MapContainer center={points[0] || PORTOVIEJO_CENTER} zoom={points.length ? 14 : 12} scrollWheelZoom className="sector-map-leaflet">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
           <MapClickCapture disabled={disabled} onAddPoint={addPoint} />
           <InitialViewport points={points} />

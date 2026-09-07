@@ -1,4 +1,6 @@
 const db = require('../db');
+const { transaction } = require('../services/transactions');
+const { validateWorkshopLocation } = require('../services/workshopGeofence');
 const { logActivity, safeLogActivity } = require('../services/audit');
 const { isNonEmptyString, isValidEmail, isValidLatitude, isValidLongitude } = require('../utils/validation');
 
@@ -13,7 +15,7 @@ const getTalleres = async (req, res) => {
       WITH latest_visitas AS (
         SELECT DISTINCT ON (v.taller_id)
           v.taller_id,
-          v.fecha_visita,
+          COALESCE(v.captured_at, v.fecha_visita::timestamptz) AS fecha_visita,
           v.vendedor_id
         FROM visitas v
         ORDER BY v.taller_id, v.fecha_visita DESC
@@ -56,7 +58,7 @@ const getTalleres = async (req, res) => {
           ($2::boolean = TRUE AND t.tipo IN ('MATRIZ', 'LOCAL', 'ALMACEN'))
           OR ($2::boolean = FALSE AND t.tipo = 'TALLER')
         )
-        AND ($3::text <> 'VENDEDOR' OR EXISTS (
+        AND ($3::text <> 'VENDEDOR' OR (t.sector_id IS NULL AND t.vendedor_asignado_id = $4) OR EXISTS (
           SELECT 1 FROM vendedor_sectores own
           JOIN sectores own_sector ON own_sector.id = own.sector_id AND own_sector.is_active = TRUE
           WHERE own.sector_id = t.sector_id AND own.vendedor_id = $4
@@ -92,7 +94,7 @@ const getTallerById = async (req, res) => {
        LEFT JOIN users assigned_user ON assigned_user.id = t.vendedor_asignado_id
        LEFT JOIN sectores s ON s.id = t.sector_id
        WHERE t.id = $1 AND (t.is_active = TRUE OR $2 = 'ADMIN')
-         AND ($2 <> 'VENDEDOR' OR EXISTS (
+         AND ($2 <> 'VENDEDOR' OR (t.sector_id IS NULL AND t.vendedor_asignado_id = $3) OR EXISTS (
            SELECT 1 FROM vendedor_sectores own
            JOIN sectores own_sector ON own_sector.id = own.sector_id AND own_sector.is_active = TRUE
            WHERE own.sector_id = t.sector_id AND own.vendedor_id = $3
@@ -146,14 +148,19 @@ const createTaller = async (req, res) => {
       const sectorCheck = await db.query('SELECT id FROM sectores WHERE id = $1 AND is_active = TRUE', [resolvedSectorId]);
       if (sectorCheck.rows.length === 0) return res.status(400).json({ error: 'El sector seleccionado no está disponible.' });
     }
-    const result = await db.query(
+    const result = await transaction(async (client) => {
+      if (normalizedType === 'TALLER') await validateWorkshopLocation(client, latitud, longitud);
+      const duplicate = await client.query('SELECT id FROM talleres WHERE LOWER(nombre) = LOWER($1)', [nombre.trim()]);
+      if (duplicate.rows.length) throw Object.assign(new Error('Ya existe un taller registrado con ese nombre.'), { status: 409 });
+      return client.query(
       `INSERT INTO talleres
          (nombre, latitud, longitud, tipo, radio_geocerca_metros, sector_id, sector, vendedor_asignado_id)
        VALUES ($1, $2, $3, $4, $5, $6, (SELECT nombre FROM sectores WHERE id = $6), $7)
        RETURNING id, nombre, latitud, longitud, tipo, radio_geocerca_metros, sector, sector_id,
                  vendedor_asignado_id, created_at`,
       [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius, resolvedSectorId, assignedSellerId]
-    );
+      );
+    });
 
     await safeLogActivity({
       req,
@@ -169,6 +176,7 @@ const createTaller = async (req, res) => {
 
     return res.status(201).json({ message: 'Punto registrado exitosamente.', taller: result.rows[0] });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
     console.error('Error creating taller:', error);
     return res.status(500).json({ error: 'Error al registrar el punto.' });
   }
@@ -246,7 +254,13 @@ const updateTaller = async (req, res) => {
       });
     }
 
-    const result = await db.query(
+    const result = await transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(74001)');
+      const current = (await client.query('SELECT latitud, longitud, tipo FROM talleres WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (normalizedType === 'TALLER' && (current.tipo !== 'TALLER' || Number(current.latitud) !== Number(latitud) || Number(current.longitud) !== Number(longitud))) {
+        await validateWorkshopLocation(client, latitud, longitud, id);
+      }
+      return client.query(
       `UPDATE talleres 
        SET nombre = $1, latitud = $2, longitud = $3, propietario = $4, telefono = $5,
            direccion = $6, correo = $7, observaciones = $8, tipo = $9, radio_geocerca_metros = $10,
@@ -269,7 +283,8 @@ const updateTaller = async (req, res) => {
         assignedSellerId,
         id
       ]
-    );
+      );
+    });
 
     await safeLogActivity({
       req,
@@ -290,6 +305,7 @@ const updateTaller = async (req, res) => {
       taller: result.rows[0]
     });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
     console.error('Error updating taller:', error);
     return res.status(500).json({ 
       error: 'Error al actualizar el taller.' 
@@ -407,7 +423,7 @@ const getTallerVisitas = async (req, res) => {
       `SELECT t.id
        FROM talleres t
        WHERE t.id = $1 AND (t.is_active = TRUE OR $2 = 'ADMIN')
-         AND ($2 <> 'VENDEDOR' OR EXISTS (
+         AND ($2 <> 'VENDEDOR' OR (t.sector_id IS NULL AND t.vendedor_asignado_id = $3) OR EXISTS (
            SELECT 1 FROM vendedor_sectores own
            JOIN sectores own_sector ON own_sector.id = own.sector_id AND own_sector.is_active = TRUE
            WHERE own.sector_id = t.sector_id AND own.vendedor_id = $3
@@ -424,7 +440,7 @@ const getTallerVisitas = async (req, res) => {
         v.foto_url, 
         v.latitud, 
         v.longitud, 
-        v.fecha_visita,
+        COALESCE(v.captured_at, v.fecha_visita::timestamptz) AS fecha_visita,
         v.observacion,
         v.programacion_id,
         v.fuera_rango,

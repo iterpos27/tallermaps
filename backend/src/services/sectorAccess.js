@@ -18,11 +18,12 @@ const sellerCanAccessWorkshop = async (queryable, sellerId, workshopId) => {
   const result = await queryable.query(
     `SELECT 1
      FROM talleres t
-     JOIN vendedor_sectores vs ON vs.sector_id = t.sector_id
-     JOIN sectores s ON s.id = vs.sector_id AND s.is_active = TRUE
      WHERE t.id = $1
-       AND vs.vendedor_id = $2
-       AND t.is_active = TRUE
+       AND t.is_active = TRUE AND t.tipo = 'TALLER'
+       AND ((t.sector_id IS NULL AND t.vendedor_asignado_id = $2) OR EXISTS (
+         SELECT 1 FROM vendedor_sectores vs JOIN sectores s ON s.id = vs.sector_id AND s.is_active = TRUE
+         WHERE vs.sector_id = t.sector_id AND vs.vendedor_id = $2
+       ))
      LIMIT 1`,
     [workshopId, sellerId]
   );

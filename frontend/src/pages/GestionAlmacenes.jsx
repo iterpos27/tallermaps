@@ -317,7 +317,7 @@ export default function GestionAlmacenes() {
 
             <div className="warehouse-map-shell">
               <MapContainer center={position || ECUADOR_CENTER} zoom={position ? 17 : 6} className="warehouse-location-map" scrollWheelZoom>
-                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" referrerPolicy="strict-origin-when-cross-origin" />
                 <LocationPicker position={position} radius={Number(radio) || 100} onSelect={setPosition} />
                 <RecenterMap position={position} />
               </MapContainer>

@@ -74,6 +74,8 @@ CREATE TABLE visitas (
   vendedor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   programacion_id INTEGER,
   foto_url VARCHAR(255) NOT NULL,
+  fuera_rango BOOLEAN DEFAULT FALSE,
+  distancia_metros DOUBLE PRECISION DEFAULT 0,
   latitud DECIMAL(10, 8) NOT NULL,
   longitud DECIMAL(11, 8) NOT NULL,
   observacion TEXT,

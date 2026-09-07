@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, Clock, MapPin, Navigation, AlertTriangle } from 'lucide-react';
 import { api, getUser } from '../api/api';
+import Modal from '../components/Modal';
 
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -29,6 +30,7 @@ export default function EntregasMensajero() {
   const [success, setSuccess] = useState('');
   const [showNewWorkshop, setShowNewWorkshop] = useState(false);
   const [newWorkshopName, setNewWorkshopName] = useState('');
+  const [cancelReason, setCancelReason] = useState(null);
   const [, setTick] = useState(0);
 
   const loadStatus = useCallback(async () => {
@@ -118,6 +120,19 @@ export default function EntregasMensajero() {
     ? Math.floor((Date.now() - new Date(status.activeRoute.salida_at).getTime()) / 1000)
     : 0;
 
+  const handleCancel = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const result = await api.entregas.cancel(cancelReason);
+      setCancelReason(null);
+      setSuccess(result.message);
+      setShowNewWorkshop(false);
+      await loadStatus();
+    } catch (err) { setError(err.message); }
+    finally { setSubmitting(false); }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -147,11 +162,12 @@ export default function EntregasMensajero() {
               <CheckCircle size={22} />
               <span>{submitting ? 'Verificando ubicación...' : 'Entrega realizada'}</span>
             </button>
+            <button type="button" className="btn btn-secondary" style={{ maxWidth: '420px', margin: '12px auto' }} disabled={submitting} onClick={() => setCancelReason('')}>Cancelar recorrido por incidencia</button>
             {showNewWorkshop && (
               <form onSubmit={handleRegisterWorkshopAndComplete} style={{ maxWidth: '420px', margin: '24px auto 0', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
                 <p style={{ fontWeight: 700, marginBottom: '10px' }}>Última opción: el taller todavía no está registrado</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '14px' }}>
-                  Escriba el nombre. Se guardará usando su ubicación actual y luego se confirmará esta entrega.
+                  Escriba el nombre. Se guardará usando su ubicación actual y luego se confirmará esta entrega. No se permite crear otro taller a 50 metros o menos de uno registrado.
                 </p>
                 <input className="form-input" value={newWorkshopName} onChange={(event) => setNewWorkshopName(event.target.value)} placeholder="Nombre del taller" required style={{ marginBottom: '12px' }} />
                 <button type="submit" className="btn btn-secondary" disabled={submitting}>
@@ -171,6 +187,15 @@ export default function EntregasMensajero() {
         )}
       </section>
 
+      {cancelReason !== null && <Modal onClose={() => !submitting && setCancelReason(null)} labelledBy="cancel-delivery-title">
+        <h2 id="cancel-delivery-title">Cancelar recorrido</h2>
+        <form onSubmit={handleCancel}>
+          <label className="form-label" htmlFor="cancel-delivery-reason">Motivo de la incidencia</label>
+          <textarea id="cancel-delivery-reason" className="form-input" required minLength={5} maxLength={1000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+          <p>El recorrido se cerrará y el motivo quedará en el historial.</p>
+          <button type="submit" className="btn btn-danger" disabled={submitting}>Confirmar cancelación</button>
+        </form>
+      </Modal>}
       <section className="glass-panel" style={{ padding: '24px' }}>
         <h2 style={{ fontSize: '1.15rem', marginBottom: '18px', display: 'flex', gap: '8px', alignItems: 'center' }}><Clock size={20} /> Entregas recientes</h2>
         {status.recent.filter((route) => route.estado === 'ENTREGADA').length === 0 ? (

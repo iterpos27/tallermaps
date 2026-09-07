@@ -187,7 +187,7 @@ const changePassword = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await db.query(
-      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, name, email, username',
+      'UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2 RETURNING id, name, email, username',
       [passwordHash, id]
     );
 
@@ -222,6 +222,10 @@ const updateUser = async (req, res) => {
   const { id } = req.params;
   const { name, email, username, role, is_active, sector_ids } = req.body;
   let transactionClient;
+
+  if (is_active !== undefined && typeof is_active !== 'boolean') {
+    return res.status(400).json({ error: 'El estado activo debe ser verdadero o falso.' });
+  }
 
   if (!isNonEmptyString(name) || !isNonEmptyString(email) || !role) {
     return res.status(400).json({ 
@@ -271,12 +275,25 @@ const updateUser = async (req, res) => {
 
     transactionClient = await db.pool.connect();
     await transactionClient.query('BEGIN');
+    await transactionClient.query('SELECT pg_advisory_xact_lock(74002)');
+    const currentUser = (await transactionClient.query('SELECT role, is_active FROM users WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    const nextActive = is_active === undefined ? currentUser.is_active : is_active;
+    if (currentUser.role === 'ADMIN' && currentUser.is_active && (normalizedRole !== 'ADMIN' || !nextActive)) {
+      const otherAdmins = await transactionClient.query("SELECT id FROM users WHERE role = 'ADMIN' AND is_active = TRUE AND id <> $1", [id]);
+      if (!otherAdmins.rows.length) {
+        await transactionClient.query('ROLLBACK');
+        transactionClient.release();
+        transactionClient = null;
+        return res.status(409).json({ error: 'Debe conservar al menos un administrador activo.' });
+      }
+    }
     const result = await transactionClient.query(
       `UPDATE users 
-       SET name = $1, email = $2, username = $3, role = $4, is_active = $5 
+       SET name = $1, email = $2, username = $3, role = $4::text, is_active = $5::boolean,
+           session_version = session_version + CASE WHEN role <> $4 OR is_active <> $5 THEN 1 ELSE 0 END
        WHERE id = $6 
        RETURNING id, name, email, username, role, is_active, created_at`,
-      [name.trim(), normalizeEmail(email), finalUsername, normalizedRole, is_active === undefined ? true : Boolean(is_active), id]
+      [name.trim(), normalizeEmail(email), finalUsername, normalizedRole, nextActive, id]
     );
 
     const assignedSectorIds = await replaceUserSectors(transactionClient, id, normalizedRole, sector_ids);

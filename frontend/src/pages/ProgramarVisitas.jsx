@@ -1,9 +1,10 @@
+import { businessDate } from '../utils/date';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CalendarDays, CheckCircle, Clock3, Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '../api/api';
 
-const toDateInput = (date) => date.toISOString().split('T')[0];
+const toDateInput = (date) => businessDate(date);
 
 const addDays = (dateValue, days) => {
   const date = new Date(`${dateValue}T12:00:00`);

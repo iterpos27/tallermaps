@@ -39,7 +39,9 @@ const pool = new Pool({
  */
 async function initDatabase() {
   if (connectionString) {
-    await initializeSchema(pool);
+    const schemaClient = await pool.connect();
+    try { await initializeSchema(schemaClient); }
+    finally { schemaClient.release(); }
     return;
   }
 
@@ -427,6 +429,20 @@ async function initializeSchema(dbClient, shouldConnect = false) {
       }
     } else {
       console.log(`Database migration ${legacyMigrationVersion} already applied.`);
+    }
+    await dbClient.query('BEGIN');
+    try {
+      await dbClient.query('SELECT pg_advisory_xact_lock(74000)');
+      const version = '002_functional_validation';
+      const applied = await dbClient.query('SELECT 1 FROM schema_migrations WHERE version = $1', [version]);
+      if (!applied.rows.length) {
+        await dbClient.query(fs.readFileSync(path.join(__dirname, 'migrations', `${version}.sql`), 'utf8'));
+        await dbClient.query('INSERT INTO schema_migrations (version, description) VALUES ($1,$2)', [version, 'Session revocation, visit idempotency and delivery incidents']);
+      }
+      await dbClient.query('COMMIT');
+    } catch (error) {
+      await dbClient.query('ROLLBACK');
+      throw error;
     }
   } catch (error) {
     console.error("Error setting up database tables:", error);

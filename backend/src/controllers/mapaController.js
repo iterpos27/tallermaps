@@ -1,4 +1,5 @@
 const db = require('../db');
+const { isValidLatitude, isValidLongitude } = require('../utils/validation');
 
 /**
  * Get workshops and company points with their latest visit information for the map.
@@ -10,7 +11,7 @@ const getPuntosMapa = async (req, res) => {
         SELECT DISTINCT ON (taller_id)
           taller_id,
           foto_url,
-          fecha_visita,
+          COALESCE(captured_at, fecha_visita::timestamptz) AS fecha_visita,
           vendedor_id
         FROM visitas
         ORDER BY taller_id, fecha_visita DESC
@@ -41,7 +42,7 @@ const getPuntosMapa = async (req, res) => {
           t.tipo IN ('MATRIZ', 'LOCAL', 'ALMACEN')
           OR (
             t.tipo = 'TALLER'
-            AND ($1::text <> 'VENDEDOR' OR EXISTS (
+            AND ($1::text <> 'VENDEDOR' OR (t.sector_id IS NULL AND t.vendedor_asignado_id = $2) OR EXISTS (
               SELECT 1 FROM vendedor_sectores own
               JOIN sectores own_sector ON own_sector.id = own.sector_id AND own_sector.is_active = TRUE
               WHERE own.sector_id = t.sector_id AND own.vendedor_id = $2
@@ -69,7 +70,7 @@ const getPuntosMapa = async (req, res) => {
 const getRuta = async (req, res) => {
   const { origen, destino } = req.body || {};
   if ([origen, destino].some((point) => (
-    !point || point.latitud === null || point.latitud === '' || point.longitud === null || point.longitud === ''
+    !point || !isValidLatitude(point.latitud) || !isValidLongitude(point.longitud)
   ))) {
     return res.status(400).json({ error: 'Debe indicar las coordenadas de origen y destino.' });
   }

@@ -1,3 +1,4 @@
+const { validateInput, validateId } = require('../middlewares/validateInput');
 const express = require('express');
 const router = express.Router();
 const tallerController = require('../controllers/tallerController');
@@ -5,6 +6,8 @@ const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 
 // Protect all workshop routes
 router.use(authenticateToken);
+router.use(validateInput);
+router.param('id', validateId);
 
 // GET /api/talleres
 router.get('/', tallerController.getTalleres);
@@ -25,6 +28,6 @@ router.delete('/:id', authorizeRoles('ADMIN'), tallerController.deleteTaller);
 router.post('/:id/restore', authorizeRoles('ADMIN'), tallerController.restoreTaller);
 
 // GET /api/talleres/:id/visitas (List visits history for a single workshop)
-router.get('/:id/visitas', tallerController.getTallerVisitas);
+router.get('/:id/visitas', authorizeRoles(['ADMIN', 'VENDEDOR']), tallerController.getTallerVisitas);
 
 module.exports = router;
