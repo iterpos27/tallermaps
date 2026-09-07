@@ -4,6 +4,14 @@ import { api } from '../api/api';
 import AlertBanner from '../components/AlertBanner';
 
 const ACTION_LABELS = {
+  talleres_UPDATE: 'Taller actualizado',
+  talleres_DELETE: 'Taller eliminado definitivamente',
+  visitas_UPDATE: 'Visita actualizada',
+  visitas_DELETE: 'Visita eliminada',
+  compromisos_UPDATE: 'Compromiso actualizado',
+  compromisos_DELETE: 'Compromiso eliminado',
+  DUPLICADOS_REVISADOS: 'Talleres cercanos revisados',
+  TALLERES_UNIFICADOS: 'Historial de talleres unificado',
   TALLER_ARCHIVADO: 'Taller eliminado',
   TALLER_RESTAURADO: 'Taller restaurado',
   TALLER_CREADO: 'Taller creado',
@@ -19,6 +27,15 @@ const getActionTone = (action) => {
   if (action.includes('CREADO') || action.includes('RESTAURADO')) return 'success';
   return 'primary';
 };
+
+const FIELD_LABELS = {nombre:'Nombre',fecha_visita:'Fecha de visita',captured_at:'Fecha de captura',observacion:'Observación',observaciones:'Observaciones',resultado:'Resultado',descripcion:'Compromiso',fecha:'Fecha de gestión',estado:'Estado',cierre:'Nota de cierre',is_active:'Activo',deleted_at:'Fecha de archivo',deleted_by:'Usuario que archivó',updated_at:'Última modificación',vendedor_id:'ID vendedor',taller_id:'ID taller',merged_into_id:'Taller que conserva el historial'};
+function AuditDetails({ details }) {
+  if(Array.isArray(details?.antes)) return <span>Origen #{details.source_id} → Destino #{details.target_id}. {details.motivo}</span>;
+  if(!details?.antes) return details?.nombre || details?.username || details?.taller || details?.motivo || '—';
+  const before=details.antes,after=details.despues || {};
+  const value=v=>v==null?'Sin valor':typeof v==='boolean'?(v?'Sí':'No'):String(v);
+  return <details><summary>Ver valores anteriores y nuevos</summary><div style={{maxWidth:420,whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{Object.keys(before).filter(key=>before[key]!==after[key]).map(key=><p key={key} style={{marginTop:8}}><strong>{FIELD_LABELS[key] || key.replaceAll('_',' ')}</strong><br />Antes: {value(before[key])}<br />Después: {value(after[key])}</p>)}</div></details>;
+}
 
 export default function ActividadAdmin() {
   const [data, setData] = useState({ items: [], total: 0, page: 1, limit: 25 });
@@ -72,7 +89,7 @@ export default function ActividadAdmin() {
               <span className="activity-icon"><Activity size={20} /></span>
               <div>
                 <h2>Historial de cambios</h2>
-                <p>Acciones sensibles realizadas por los administradores</p>
+                <p>Cambios de talleres, visitas, usuarios y compromisos</p>
               </div>
             </div>
             <span className="activity-total">{data.total} {data.total === 1 ? 'registro' : 'registros'}</span>
@@ -81,7 +98,7 @@ export default function ActividadAdmin() {
           <div className="activity-table-scroll">
             <table className="premium-table activity-table">
               <thead>
-                <tr><th>Fecha</th><th>Administrador</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr>
+                <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr>
               </thead>
               <tbody>
                 {data.items.map((item) => (
@@ -90,7 +107,7 @@ export default function ActividadAdmin() {
                     <td><strong>{item.user_name || item.username || 'Sistema'}</strong></td>
                     <td><span className={`activity-badge activity-badge-${getActionTone(item.action)}`}>{ACTION_LABELS[item.action] || item.action}</span></td>
                     <td><span className="activity-entity">{item.entity_type} #{item.entity_id || '—'}</span></td>
-                    <td>{item.details?.nombre || item.details?.username || item.details?.taller || '—'}</td>
+                    <td><AuditDetails details={item.details} /></td>
                     <td><code className="activity-ip">{item.ip_address || '—'}</code></td>
                   </tr>
                 ))}

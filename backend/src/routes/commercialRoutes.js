@@ -1,0 +1,15 @@
+const router = require('express').Router();
+const { authenticateToken,authorizeRoles } = require('../middlewares/auth');
+const { validateInput,validateId } = require('../middlewares/validateInput');
+const c = require('../controllers/commercialController');
+router.use(authenticateToken,authorizeRoles(['ADMIN','VENDEDOR']),validateInput);
+router.param('id',validateId);
+router.get('/compromisos',c.list);
+router.post('/compromisos',c.create);
+router.put('/compromisos/:id',c.close);
+router.get('/indicadores',authorizeRoles('ADMIN'),c.metrics);
+router.get('/respaldos',authorizeRoles('ADMIN'),async (req,res,next)=>{try{res.json(await require('../services/backup').getStatus());}catch(e){next(e);}});
+router.get('/duplicados',authorizeRoles('ADMIN'),c.duplicates);
+router.post('/duplicados',authorizeRoles('ADMIN'),c.reviewDuplicate);
+router.post('/unificar',authorizeRoles('ADMIN'),c.merge);
+module.exports=router;

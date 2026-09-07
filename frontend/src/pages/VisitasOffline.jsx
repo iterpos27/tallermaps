@@ -3,6 +3,7 @@ import { CloudOff, RefreshCw, Trash2 } from 'lucide-react';
 import { api, offlineStorage } from '../api/api';
 import AlertBanner from '../components/AlertBanner';
 import Modal from '../components/Modal';
+import CommercialFields from '../components/CommercialFields';
 
 export default function VisitasOffline() {
   const [visits, setVisits] = useState([]);
@@ -140,6 +141,7 @@ export default function VisitasOffline() {
             <label className="form-label" htmlFor="offline-observation">Observación</label>
             <textarea id="offline-observation" className="form-input" required minLength={10} value={editing.observacion || ''} onChange={e => setEditing({ ...editing, observacion: e.target.value })} />
             {editing.programacion_id && <label><input type="checkbox" onChange={() => setEditing({ ...editing, programacion_id: null })} /> Desvincular programación rechazada</label>}
+            <CommercialFields value={editing} onChange={setEditing} disabled={busy} />
             <p>La fotografía, ubicación y hora de captura se conservan. No se permiten talleres nuevos a 50 metros o menos de otro registrado.</p>
             <button type="submit" className="btn btn-primary" disabled={busy}>Guardar corrección</button>
           </form>

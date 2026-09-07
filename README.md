@@ -215,6 +215,14 @@ La migración `002_functional_validation` se aplica automáticamente al iniciar 
 
 Las pruebas integradas usan exclusivamente PostgreSQL local en una base de pruebas. Para ejecutarlas, configure `QA_PG_PORT` con el puerto de esa instancia y ejecute `npm run check`; crean y eliminan un esquema aislado. Sin esa variable se ejecutan las pruebas unitarias y de la cola offline, y la prueba integrada queda omitida.
 
+## Reportes de talleres y visitas
+
+Los administradores acceden a **Reportes** para consultar semanas de lunes a domingo o rangos de fechas inclusivos, con filtro por vendedor o creador. El CSV compatible con Excel incluye tipo de actividad, ID y nombre del taller, observaciones, fecha y hora de Ecuador y responsable. La vista muestra 50 filas por página; la descarga contiene todos los resultados.
+
+Cada visita y alta tiene una fila independiente: un taller creado y visitado en el período aparece en ambas actividades. Las visitas usan su fecha de realización; las altas, su fecha de registro. Se incluyen talleres archivados. Las creaciones históricas sin autor verificable aparecen como **Sin registro**, sin atribuirlas al vendedor actualmente asignado. Las observaciones de altas corresponden a la ficha del taller.
+
+La migración `003_reports` se aplica al iniciar el backend o con `npm run migrate --prefix backend`. Registra el creador de nuevas altas y recupera autores históricos disponibles en la auditoría. Las fechas históricas de creación se conservan tal como estaban almacenadas.
+
 ## Control de entregas por geocerca
 
 - El administrador puede crear usuarios con rol `MENSAJERO` y configurar puntos internos como `MATRIZ`, `LOCAL` o `ALMACEN` con un radio entre 20 y 1000 metros. Los talleres los registra normalmente el vendedor y, como alternativa, el mensajero al confirmar una entrega en un destino nuevo.
@@ -225,10 +233,36 @@ Las pruebas integradas usan exclusivamente PostgreSQL local en una base de prueb
 
 El navegador no registra ubicaciones cuando está cerrado. Para detectar la salida, la página debe seguir abierta al abandonar el punto de origen; una vez que el servidor confirma la salida, el recorrido permanece activo aunque luego se cierre la web.
 
+## Seguimiento comercial y auditoría
+
+**Nueva visita** incluye resultado comercial y, opcionalmente, próxima fecha y compromiso. El resultado Seguimiento exige ambos. Los registros de versiones anteriores siguen sincronizando como Sin registro cuando no incluyen resultado. La fecha del compromiso no puede ser anterior a la captura de la visita.
+
+**Seguimiento** permite consultar pendientes/vencidos/cerrados, crear compromisos y cerrar con nota. Cada vendedor solo accede a sus compromisos; el administrador accede a todos. La ficha muestra contactos, fotos, visitas, resultados y compromisos. La fecha del compromiso es un recordatorio comercial, no reserva una franja en la agenda: las visitas con horario se crean desde Programación.
+
+**Reportes** añade indicadores por vendedor, Excel con resumen y PDF paginado, además de CSV. El cumplimiento es programaciones ejecutadas / programaciones no canceladas del período. Ventas cuenta visitas marcadas Venta realizada; no representa facturación ni monto vendido. Las bibliotecas de exportación se cargan cuando se utilizan.
+
+**Actividad** conserva instantáneas anteriores/nuevas al modificar o eliminar talleres, visitas y compromisos. Los cambios directos en la base sin contexto de usuario quedan con autor Sistema. La migración `004_commercial` es automática al iniciar; también se puede ejecutar `npm run migrate --prefix backend`.
+
+### Duplicados antiguos
+
+En Seguimiento → Revisar duplicados se muestran pares activos a 50 m o menos. Guardar revisión no modifica las fichas. Unificar historial requiere elegir el taller a conservar y un motivo: mueve visitas, programaciones y compromisos; mantiene responsables y fotografías, y archiva la ficha de origen. Conserva los datos, sector y ubicación del destino. El origen no se puede restaurar directamente después de unificar. Los recorridos de mensajería conservan sus puntos históricos. Un cruce exacto de vendedor/fecha/hora en programación bloquea la unificación sin cambios parciales.
+
+## Respaldo automático y recuperación
+
+El backend comprueba cada hora si corresponde un respaldo, con intervalo predeterminado de 24 horas; la primera comprobación ocurre 30 segundos después de iniciar. Incluye una instantánea PostgreSQL y la carpeta de fotos, manifiesto SHA-256 y conteos de seis tablas. Durante la captura se bloquean brevemente escrituras a talleres/visitas para mantener las referencias de fotos consistentes. La conexión a PostgreSQL tiene límite de 10 segundos y la herramienta de respaldo de 120 segundos; un error no actualiza el último respaldo correcto.
+
+- `BACKUP_ENABLED=false`: desactiva la ejecución automática.
+- `BACKUP_INTERVAL_HOURS`: intervalo, mínimo 1 hora; predeterminado 24.
+- `BACKUP_DIR`: carpeta de respaldos. Por defecto es `backups` junto a la carpeta `uploads`. En producción ambas deben estar en almacenamiento persistente.
+- `PG_DUMP_PATH` y `PG_RESTORE_PATH`: rutas opcionales a las herramientas PostgreSQL. El Dockerfile instala el cliente 18 desde el [repositorio oficial de PostgreSQL](https://www.postgresql.org/download/linux/debian/). En instalaciones sin Docker se necesitan herramientas compatibles con la versión del servidor.
+- `npm run backup --prefix backend`: respaldo manual.
+- `npm run backup:verify --prefix backend`: restaura el último respaldo en una base temporal `restore_qa_*`, copia/verifica las fotos y contrasta conteos. Elimina únicamente esa base y carpeta temporales. La cuenta de base necesita permiso de crear bases para esta prueba; no sobrescribe la base original.
+
+El administrador puede ver el estado en Seguimiento → Estado de respaldos. La verificación se ejecuta expresamente con el comando anterior; no corre en cada respaldo. No se eliminan respaldos antiguos automáticamente. Conviene copiar los respaldos fuera del servidor: una copia en el mismo disco no protege frente a la pérdida completa del servidor.
+
+Para mañana, seguir [PRUEBAS_CAMPO.md](PRUEBAS_CAMPO.md). Las pruebas de GPS real, permisos de cámara y comportamiento al cerrar el navegador deben ejecutarse en los teléfonos usados por el equipo.
+
 ## Próximas mejoras recomendadas
 
 - Migrar fotos a almacenamiento de objetos como Cloudflare R2 o S3 si el volumen crece.
-- Adoptar migraciones SQL versionadas en vez de ejecutar ajustes de esquema durante el arranque.
-- Mover la autenticación a cookies `HttpOnly` cuando frontend y API tengan un dominio estable.
 - Integrar un servicio externo de alertas y trazas si aumenta el volumen de usuarios.
-- Añadir pruebas de integración contra una base PostgreSQL temporal.

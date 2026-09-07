@@ -16,6 +16,8 @@ const adminGroups = [
     links: [
       { to: '/dashboard', label: 'Inicio', mobileLabel: 'Inicio', icon: Home },
       { to: '/programacion', label: 'Programación', mobileLabel: 'Agenda', icon: CalendarDays },
+      { to: '/reportes', label: 'Reportes', icon: ClipboardList },
+      { to: '/seguimiento', label: 'Seguimiento', icon: CalendarDays },
       { to: '/mapa', label: 'Mapa y rutas', mobileLabel: 'Mapa', icon: Map },
     ],
   },
@@ -40,6 +42,7 @@ const adminGroups = [
 const adminLinks = adminGroups.flatMap((g) => g.links);
 
 const vendedorLinks = [
+  { to: '/seguimiento', label: 'Seguimiento', icon: CalendarDays },
   { to: '/dashboard', label: 'Inicio', mobileLabel: 'Inicio', icon: Home },
   { to: '/mi-ruta', label: 'Mi ruta de hoy', mobileLabel: 'Mi ruta', icon: Route },
   { to: '/programar-visitas', label: 'Programar', mobileLabel: 'Agenda', icon: CalendarDays },

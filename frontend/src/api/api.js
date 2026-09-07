@@ -102,6 +102,16 @@ const makeRequest = async (endpoint, options = {}) => {
  * API endpoints
  */
 export const api = {
+  comercial: {
+    merge: data => makeRequest('/comercial/unificar',{method:'POST',body:JSON.stringify(data)}),
+    backups: () => makeRequest('/comercial/respaldos'),
+    list: () => makeRequest('/comercial/compromisos'),
+    create: data => makeRequest('/comercial/compromisos',{method:'POST',body:JSON.stringify(data)}),
+    close: (id,data) => makeRequest(`/comercial/compromisos/${id}`,{method:'PUT',body:JSON.stringify(data)}),
+    metrics: filters => makeRequest(`/comercial/indicadores?${new URLSearchParams(filters)}`),
+    duplicates: () => makeRequest('/comercial/duplicados'),
+    review: data => makeRequest('/comercial/duplicados',{method:'POST',body:JSON.stringify(data)})
+  },
   auth: {
     login: (identifier, password) => 
       makeRequest('/auth/login', {
@@ -162,6 +172,7 @@ export const api = {
   },
   
   visitas: {
+    reporte: (filters) => makeRequest(`/visitas/reporte?${new URLSearchParams(filters)}`, { method: 'GET' }),
     list: (filters = {}) => {
       const params = new URLSearchParams();
       if (filters.search) params.append('search', filters.search);
@@ -348,6 +359,7 @@ export const offlineStorage = {
         const formData = new FormData();
         formData.append('client_request_id', visit.id);
         formData.append('owner_id', visit.owner_id);
+        for (const key of ['resultado','proxima_fecha','compromiso']) if (visit[key]) formData.append(key,visit[key]);
         formData.append('captured_at', visit.captured_at || visit.queuedAt);
         if (visit.taller_id) {
           formData.append('taller_id', visit.taller_id);

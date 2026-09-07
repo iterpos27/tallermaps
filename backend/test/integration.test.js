@@ -21,11 +21,17 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
   const migration = fs.readFileSync(path.join(__dirname, '../src/db/migrations/002_functional_validation.sql'), 'utf8');
   await pool.query(migration);
   await pool.query(migration); // Migration is safe to retry.
+  const reportMigration = fs.readFileSync(path.join(__dirname, '../src/db/migrations/003_reports.sql'), 'utf8');
+  await pool.query(reportMigration);
+  await pool.query(reportMigration);
+  const commercialMigration=fs.readFileSync(path.join(__dirname,'../src/db/migrations/004_commercial.sql'),'utf8');
+  await pool.query(commercialMigration);
+  await pool.query(commercialMigration);
   const express = require('express');
   const jwt = require('jsonwebtoken');
   const app = express();
   app.use(express.json());
-  for (const [route, file] of [['visitas','visita'],['talleres','taller'],['programaciones','programacion'],['users','user'],['entregas','entrega']]) {
+  for (const [route, file] of [['comercial','commercial'],['visitas','visita'],['talleres','taller'],['programaciones','programacion'],['users','user'],['entregas','entrega']]) {
     app.use(`/api/${route}`, require(`../src/routes/${file}Routes`));
   }
   const server = app.listen(0, '127.0.0.1');
@@ -62,6 +68,81 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     return form;
   };
   let first;
+  await t.test('resultado y compromiso son atómicos, idempotentes y privados', async () => {
+    const key=randomUUID();
+    const form=()=>visitForm({taller_nombre:'Taller seguimiento QA',latitud:-20,resultado:'SEGUIMIENTO',compromiso:'Enviar cotización de repuestos',proxima_fecha:'2026-01-03',client_request_id:key});
+    const saved=await api(seller,'POST','/visitas',form());
+    assert.equal(saved.status,201,JSON.stringify(saved));
+    assert.equal(saved.body.visita.resultado,'SEGUIMIENTO');
+    assert.equal((await api(seller,'POST','/visitas',form())).status,200);
+    const list=await api(seller,'GET','/comercial/compromisos');
+    assert.equal(list.body.length,1);
+    assert.equal((await api(other,'GET','/comercial/compromisos')).body.length,0);
+    assert.equal((await api(messenger,'GET','/comercial/compromisos')).status,403);
+    const commitment=list.body[0];
+    assert.equal((await api(other,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cierre sin autorización'})).status,404);
+    assert.equal((await api(seller,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cotización enviada al cliente'})).status,200);
+    assert.equal((await api(seller,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Intento repetido de cierre'})).status,409);
+    const audit=(await pool.query("SELECT * FROM activity_logs WHERE action='compromisos_UPDATE' AND entity_id=$1",[String(commitment.id)])).rows[0];
+    assert.equal(audit.user_id,seller.id);assert.equal(audit.details.antes.estado,'PENDIENTE');assert.equal(audit.details.despues.estado,'COMPLETADO');
+    for(const values of [{resultado:'INVALIDO'},{resultado:'SEGUIMIENTO'},{resultado:'SEGUIMIENTO',compromiso:'Enviar cotización de prueba',proxima_fecha:'2025-12-31'}]) {
+      assert.equal((await api(seller,'POST','/visitas',visitForm({taller_nombre:'No crear',latitud:-21,...values}))).status,400);
+    }
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM talleres WHERE nombre='No crear'")).rows[0].n,0);
+    const metrics=await api(admin,'GET','/comercial/indicadores?fecha_inicio=2026-01-01&fecha_fin=2026-01-03');
+    assert.equal(metrics.status,200);assert.equal(metrics.body.find(m=>m.id===seller.id).visitas,1);
+    assert.equal((await api(seller,'GET','/comercial/indicadores?fecha_inicio=2026-01-01&fecha_fin=2026-01-03')).status,403);
+    assert.equal((await api(seller,'PUT',`/visitas/${saved.body.visita.id}/fecha`,{fecha:'2026-01-02',hora:'10:30'})).status,200);
+    const changed=(await pool.query("SELECT * FROM activity_logs WHERE action='visitas_UPDATE' AND entity_id=$1",[String(saved.body.visita.id)])).rows[0];
+    assert.equal(changed.user_id,seller.id);assert.ok(changed.details.antes.fecha_visita!==changed.details.despues.fecha_visita);
+  });
+  await t.test('revisión de duplicados antiguos no altera sus visitas', async () => {
+    const pair=(await pool.query("INSERT INTO talleres(nombre,latitud,longitud) VALUES('Legacy A',-30,-80),('Legacy B',-30.0001,-80) RETURNING id")).rows;
+    const pairs=await api(admin,'GET','/comercial/duplicados');
+    assert.equal(pairs.status,200);assert.ok(pairs.body.some(p=>p.a_id===pair[0].id&&p.b_id===pair[1].id));
+    const review={taller_a:pair[0].id,taller_b:pair[1].id,motivo:'Dos negocios distintos en locales contiguos'};
+    assert.equal((await api(seller,'POST','/comercial/duplicados',review)).status,403);
+    assert.equal((await api(admin,'POST','/comercial/duplicados',review)).status,200);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM talleres WHERE id IN ($1,$2) AND is_active',pair.map(p=>p.id))).rows[0].n,2);
+    await pool.query("INSERT INTO visitas(taller_id,vendedor_id,foto_url,latitud,longitud,observacion) VALUES($1,$2,'qa',-30,-80,'Visita histórica para unificar')",[pair[1].id,seller.id]);
+    const merge={source_id:pair[1].id,target_id:pair[0].id,motivo:'Mismo taller registrado dos veces en el pasado'};
+    assert.equal((await api(seller,'POST','/comercial/unificar',merge)).status,403);
+    for(const point of pair) await pool.query("INSERT INTO programaciones_visita(taller_id,vendedor_id,fecha_programada,hora_programada) VALUES($1,$2,'2026-10-01','09:00')",[point.id,seller.id]);
+    assert.equal((await api(admin,'POST','/comercial/unificar',merge)).status,409);
+    assert.equal((await pool.query('SELECT is_active FROM talleres WHERE id=$1',[pair[1].id])).rows[0].is_active,true);
+    await pool.query('DELETE FROM programaciones_visita WHERE taller_id=$1',[pair[1].id]);
+    assert.equal((await api(admin,'POST','/comercial/unificar',merge)).status,200);
+    const archived=(await pool.query('SELECT is_active,merged_into_id FROM talleres WHERE id=$1',[pair[1].id])).rows[0];
+    assert.equal(archived.is_active,false);assert.equal(archived.merged_into_id,pair[0].id);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM visitas WHERE taller_id=$1',[pair[0].id])).rows[0].n,1);
+    assert.equal((await api(admin,'POST',`/talleres/${pair[1].id}/restore`,{})).status,404);
+  });
+  await t.test('reportes: límites inclusivos, creador, filtros y permisos', async () => {
+    const created = await workshop('Reporte taller', -15);
+    const id = created.body.taller.id;
+    assert.equal((await pool.query('SELECT created_by FROM talleres WHERE id=$1', [id])).rows[0].created_by, seller.id);
+    await pool.query("UPDATE talleres SET created_at='2026-03-02 00:00:00', observaciones='Alta de prueba' WHERE id=$1", [id]);
+    for (const date of ['2026-03-01 23:59:59', '2026-03-02 00:00:00', '2026-03-08 23:59:59', '2026-03-09 00:00:00']) {
+      await pool.query('INSERT INTO visitas(taller_id,vendedor_id,foto_url,latitud,longitud,fecha_visita,observacion) VALUES($1,$2,\'qa\',-15,-80,$3,\'Observación de prueba\')', [id,seller.id,date]);
+    }
+    const url = '/visitas/reporte?fecha_inicio=2026-03-02&fecha_fin=2026-03-08';
+    const report = await api(admin,'GET',url);
+    assert.equal(report.status,200);
+    assert.equal(report.body.length,3);
+    assert.equal(report.body.filter(r => r.tipo === 'VISITA').length,2);
+    assert.ok(report.body.every(r => r.responsable === seller.name));
+    assert.equal((await api(admin,'GET',`${url}&vendedor_id=${other.id}`)).body.length,0);
+    assert.equal((await api(seller,'GET',url)).status,403);
+    assert.equal((await api(messenger,'GET',url)).status,403);
+    assert.equal((await api(admin,'GET','/visitas/reporte')).status,400);
+    assert.equal((await api(admin,'GET','/visitas/reporte?fecha_inicio=2026-03-09&fecha_fin=2026-03-02')).status,400);
+    assert.equal((await api(admin,'GET','/visitas/reporte?fecha_inicio=2026-02-30&fecha_fin=2026-03-02')).status,400);
+    await pool.query('UPDATE talleres SET created_by=NULL WHERE id=$1',[id]);
+    const legacy = await api(admin,'GET',url);
+    assert.equal(legacy.body.find(r => r.tipo === 'CREACION').responsable,null);
+    await pool.query('DELETE FROM visitas WHERE taller_id=$1',[id]);
+    await pool.query('DELETE FROM talleres WHERE id=$1',[id]);
+  });
   await t.test('rechaza nuevos talleres a 49/50 m, permite 51 m y protege ediciones', async () => {
     first = await workshop('Punto base', -1);
     assert.equal(first.status, 201, JSON.stringify(first));

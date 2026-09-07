@@ -63,3 +63,10 @@ test('sincronizaciones simultáneas comparten una sola operación', async () => 
   await Promise.all([ctx.storage.syncPendingVisits(),ctx.storage.syncPendingVisits()]);
   assert.equal(ctx.requests.length,1);
 });
+test('sincronización conserva resultado, compromiso y fecha de seguimiento',async()=>{
+  const ctx=client([{...pending('commercial-visit'),resultado:'SEGUIMIENTO',compromiso:'Enviar cotización al cliente',proxima_fecha:'2026-01-03'}]);
+  await ctx.storage.syncPendingVisits();
+  assert.equal(ctx.requests[0].get('resultado'),'SEGUIMIENTO');
+  assert.equal(ctx.requests[0].get('compromiso'),'Enviar cotización al cliente');
+  assert.equal(ctx.requests[0].get('proxima_fecha'),'2026-01-03');
+});

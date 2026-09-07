@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "test": "node --test",
     "backup": "node scripts/backup.js",
+    "backup:verify": "node scripts/verifyBackup.js",
     "migrate": "node scripts/migrate.js",
     "migrate:sectors": "node scripts/migrateSectors.js",
     "verify:sectors": "node scripts/verifySectorAccess.js",

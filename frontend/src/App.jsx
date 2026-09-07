@@ -21,6 +21,8 @@ import VisitasOffline from './pages/VisitasOffline';
 import EntregasMensajero from './pages/EntregasMensajero';
 import ControlEntregas from './pages/ControlEntregas';
 import GestionSectores from './pages/GestionSectores';
+const Reportes = lazy(() => import('./pages/Reportes'));
+const Seguimiento = lazy(() => import('./pages/Seguimiento'));
 
 const MapaTalleres = lazy(() => import('./pages/MapaTalleres'));
 const MiRutaHoy = lazy(() => import('./pages/MiRutaHoy'));
@@ -133,6 +135,8 @@ export default function App() {
         />
 
         {/* Admin-Only Routes */}
+        <Route path="/seguimiento" element={<ProtectedRoute allowedRoles={['ADMIN','VENDEDOR']}><DashboardLayout><Seguimiento /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/reportes" element={<ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><Reportes /></DashboardLayout></ProtectedRoute>} />
         <Route
           path="/entregas"
           element={

@@ -62,3 +62,12 @@ Revisión del código local, 6 de septiembre de 2026. No se modificó la lógica
 Las pruebas actuales cubren utilidades y un registro de taller nuevo con dependencias simuladas; no acreditan el flujo completo. Añadir pruebas de permisos por rol, revocación, cambio de usuario con cola offline, pérdida de respuesta, transacciones, concurrencia, reactivación con cruces y GPS inválido. Completar una ronda funcional en móvil con GPS denegado, precisión deficiente y pérdida/recuperación de conexión.
 
 Orden recomendado: permisos y sesiones; propietario/idempotencia offline; integridad de visita-programación; validadores y conflictos; ajustes de opciones según las reglas operativas.
+## Preparación comercial para pruebas de campo (2026-09-06)
+
+Implementados resultados comerciales, compromisos y cierres, ficha unificada, indicadores, CSV/Excel/PDF, auditoría antes/después y revisión/unificación manual de duplicados. Respaldos automáticos con base y fotos, manifiesto de integridad y comando de restauración temporal.
+
+Validación: 44 pruebas aprobadas con PostgreSQL 17 aislado; lint y build correctos. Pruebas de exportación reabren Excel y verifican todas las filas y valores literales; PDF de 90 filas conserva el último registro y genera varias páginas. Recuperación comprobada en base temporal: seis tablas con conteos coincidentes y dos archivos íntegros (dump y fotografía). La verificación también copia y comprueba la foto restaurada.
+
+Interfaz local: login con administrador ficticio autorizado, reporte semanal con indicadores, ficha de taller con visita/foto/compromiso, cierre de compromiso y consulta del estado COMPLETADO, detección de par histórico a 11,1 m y registro de auditoría visibles. Las acciones de descarga se ejecutaron sin errores de aplicación; el evento de descarga del navegador integrado no pudo confirmarse, por lo que los formatos se comprobaron adicionalmente desde el generador real.
+
+Pendiente externo: pruebas físicas de GPS/cámara/conectividad según PRUEBAS_CAMPO.md. No se construyó la imagen Docker porque su motor no está en ejecución. No se publicó esta versión ni se aplicaron migraciones a la base real. El build advierte sobre el tamaño de ExcelJS, que se carga únicamente al exportar.

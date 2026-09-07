@@ -1,4 +1,5 @@
 const { transaction, rejectRequest } = require('../services/transactions');
+const { validateCommercial } = require('../services/commercial');
 const { validateWorkshopLocation, distanceMeters } = require('../services/workshopGeofence');
 const { sellerCanAccessWorkshop } = require('../services/sectorAccess');
 const { storageService } = require('../services/storage');
@@ -28,6 +29,7 @@ module.exports = async (req, res) => {
     for (const value of [taller_id, programacion_id]) {
       if (value != null && value !== '' && !/^[1-9]\d*$/.test(String(value))) throw rejectRequest(400, 'El identificador de taller o programación no es válido.');
     }
+    const commercial = validateCommercial(req.body, captured);
     const visita = await transaction(async (client) => {
       // Serialize schedule operations for the seller and retries of the same visit.
       await client.query('SELECT pg_advisory_xact_lock(74003, $1::integer)', [sellerId]);
@@ -48,8 +50,8 @@ module.exports = async (req, res) => {
         const existing = await client.query('SELECT id FROM talleres WHERE LOWER(nombre) = LOWER($1)', [taller_nombre.trim()]);
         if (existing.rows.length) throw rejectRequest(409, 'Ya existe un taller con ese nombre. Selecciónelo en talleres existentes.');
         workshop = (await client.query(
-          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id) VALUES ($1, $2, $3, $4) RETURNING id, latitud, longitud, radio_geocerca_metros`,
-          [taller_nombre.trim(), latitud, longitud, sellerId]
+          `INSERT INTO talleres (nombre, latitud, longitud, vendedor_asignado_id, created_by, observaciones) VALUES ($1, $2, $3, $4, $4, $5) RETURNING id, latitud, longitud, radio_geocerca_metros`,
+          [taller_nombre.trim(), latitud, longitud, sellerId, observacion.trim()]
         )).rows[0];
         isNew = true;
       }
@@ -72,17 +74,21 @@ module.exports = async (req, res) => {
       const photoUrl = await storageService.saveFile(file, req);
       const result = await client.query(
         `INSERT INTO visitas (taller_id, vendedor_id, programacion_id, foto_url, latitud, longitud, observacion,
-          fuera_rango, distancia_metros, client_request_id, fecha_visita, captured_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz AT TIME ZONE 'America/Guayaquil',$11::timestamptz) RETURNING *`,
+          fuera_rango, distancia_metros, client_request_id, fecha_visita, captured_at, resultado)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz AT TIME ZONE 'America/Guayaquil',$11::timestamptz,$12) RETURNING *`,
         [workshop.id, sellerId, scheduleId, photoUrl, latitud, longitud, observacion.trim(),
-          distance > Number(workshop.radio_geocerca_metros || 100), distance, client_request_id, captured.toISOString()]
+          distance > Number(workshop.radio_geocerca_metros || 100), distance, client_request_id, captured.toISOString(), commercial.resultado]
       );
       if (scheduleId) await client.query(
         `UPDATE programaciones_visita SET estado = 'EJECUTADA', visita_id = $1,
          finalizada_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [result.rows[0].id, scheduleId]
       );
+      if (commercial.fecha) await client.query(
+        'INSERT INTO compromisos(taller_id,visita_id,vendedor_id,descripcion,fecha) VALUES($1,$2,$3,$4,$5)',
+        [workshop.id,result.rows[0].id,sellerId,commercial.descripcion,commercial.fecha]
+      );
       return result.rows[0];
-    });
+    }, sellerId);
     committed = true;
     return res.status(replayed ? 200 : 201).json({ message: replayed ? 'La visita ya estaba registrada.' : 'Visita registrada exitosamente.', visita: { ...visita, fecha_visita: visita.captured_at || visita.fecha_visita } });
   } catch (error) {

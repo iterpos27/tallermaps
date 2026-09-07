@@ -73,6 +73,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/talleres', require('./routes/tallerRoutes'));
 app.use('/api/visitas', require('./routes/visitaRoutes'));
+app.use('/api/comercial', require('./routes/commercialRoutes'));
 app.use('/api/mapa', require('./routes/mapaRoutes'));
 app.use('/api/sectores', require('./routes/sectorRoutes'));
 app.use('/api/programaciones', require('./routes/programacionRoutes'));
@@ -139,6 +140,7 @@ async function startServer() {
     console.log("Initializing database connection...");
     await initDatabase();
     console.log("Database initialized successfully.");
+    require('./services/backup').startBackups();
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);

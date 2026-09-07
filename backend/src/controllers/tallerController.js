@@ -45,6 +45,7 @@ const getTalleres = async (req, res) => {
         t.radio_geocerca_metros,
         t.is_active,
         t.deleted_at,
+        t.merged_into_id,
         t.created_at,
         lv.fecha_visita AS ultima_fecha_visita,
         u.name AS ultimo_vendedor_nombre
@@ -154,11 +155,11 @@ const createTaller = async (req, res) => {
       if (duplicate.rows.length) throw Object.assign(new Error('Ya existe un taller registrado con ese nombre.'), { status: 409 });
       return client.query(
       `INSERT INTO talleres
-         (nombre, latitud, longitud, tipo, radio_geocerca_metros, sector_id, sector, vendedor_asignado_id)
-       VALUES ($1, $2, $3, $4, $5, $6, (SELECT nombre FROM sectores WHERE id = $6), $7)
+         (nombre, latitud, longitud, tipo, radio_geocerca_metros, sector_id, sector, vendedor_asignado_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, (SELECT nombre FROM sectores WHERE id = $6), $7, $8)
        RETURNING id, nombre, latitud, longitud, tipo, radio_geocerca_metros, sector, sector_id,
                  vendedor_asignado_id, created_at`,
-      [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius, resolvedSectorId, assignedSellerId]
+      [nombre.trim(), latitud, longitud, normalizedType, geofenceRadius, resolvedSectorId, assignedSellerId, req.user.id]
       );
     });
 
@@ -256,6 +257,7 @@ const updateTaller = async (req, res) => {
 
     const result = await transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(74001)');
+      await client.query("SELECT set_config('app.actor_id', $1, true)", [String(req.user.id)]);
       const current = (await client.query('SELECT latitud, longitud, tipo FROM talleres WHERE id = $1 FOR UPDATE', [id])).rows[0];
       if (normalizedType === 'TALLER' && (current.tipo !== 'TALLER' || Number(current.latitud) !== Number(latitud) || Number(current.longitud) !== Number(longitud))) {
         await validateWorkshopLocation(client, latitud, longitud, id);
@@ -328,6 +330,7 @@ const deleteTaller = async (req, res) => {
   try {
     client = await db.pool.connect();
     await client.query('BEGIN');
+    await client.query("SELECT set_config('app.actor_id', $1, true)", [String(req.user.id)]);
 
     const tallerResult = await client.query(
       'SELECT id, nombre FROM talleres WHERE id = $1 AND is_active = TRUE FOR UPDATE',
@@ -379,10 +382,11 @@ const restoreTaller = async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query("SELECT set_config('app.actor_id', $1, true)", [String(req.user.id)]);
     const result = await client.query(
       `UPDATE talleres
        SET is_active = TRUE, deleted_at = NULL, deleted_by = NULL
-       WHERE id = $1 AND is_active = FALSE
+       WHERE id = $1 AND is_active = FALSE AND merged_into_id IS NULL
        RETURNING id, nombre`,
       [id]
     );
@@ -442,6 +446,7 @@ const getTallerVisitas = async (req, res) => {
         v.longitud, 
         COALESCE(v.captured_at, v.fecha_visita::timestamptz) AS fecha_visita,
         v.observacion,
+        v.resultado,
         v.programacion_id,
         v.fuera_rango,
         v.distancia_metros,

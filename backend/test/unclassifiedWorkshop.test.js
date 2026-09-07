@@ -18,7 +18,7 @@ test('un vendedor registra una visita con taller nuevo sin seleccionar sector', 
 
   db.query = async (sql, params = []) => {
     executedQueries.push({ sql, params });
-    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.includes('pg_advisory_xact_lock') || sql.includes('client_request_id') && sql.startsWith('SELECT') || sql.includes('latitud BETWEEN')) return { rows: [] };
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.includes('set_config') || sql.includes('pg_advisory_xact_lock') || sql.includes('client_request_id') && sql.startsWith('SELECT') || sql.includes('latitud BETWEEN')) return { rows: [] };
 
     if (sql.includes('SELECT id FROM talleres WHERE LOWER(nombre)')) return { rows: [] };
     if (sql.includes('INSERT INTO talleres')) return { rows: [{ id: 81 }] };
@@ -74,6 +74,7 @@ test('un vendedor registra una visita con taller nuevo sin seleccionar sector', 
     'Taller nuevo sin clasificar',
     '-1.0577',
     '-80.4558',
-    12
+    12,
+    'Primera visita registrada correctamente.'
   ]);
 });

@@ -24,7 +24,7 @@ const sellerCanAccessWorkshop = async (queryable, sellerId, workshopId) => {
          SELECT 1 FROM vendedor_sectores vs JOIN sectores s ON s.id = vs.sector_id AND s.is_active = TRUE
          WHERE vs.sector_id = t.sector_id AND vs.vendedor_id = $2
        ))
-     LIMIT 1`,
+     LIMIT 1 FOR SHARE OF t`,
     [workshopId, sellerId]
   );
   return result.rows.length > 0;

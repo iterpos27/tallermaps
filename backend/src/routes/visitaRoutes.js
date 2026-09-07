@@ -13,6 +13,7 @@ router.use(authorizeRoles(['ADMIN', 'VENDEDOR']));
 
 // GET /api/visitas
 router.get('/', visitaController.getVisitas);
+router.get('/reporte', authorizeRoles('ADMIN'), require('../controllers/reportController'));
 
 // POST /api/visitas (accepts multi-part form data with field 'foto')
 router.post('/', authorizeRoles('VENDEDOR'), upload.single('foto'), visitaController.createVisita);

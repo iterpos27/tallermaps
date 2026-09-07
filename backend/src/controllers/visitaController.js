@@ -1,4 +1,5 @@
 const db = require('../db');
+const { transaction } = require('../services/transactions');
 const { storageService } = require('../services/storage');
 const { logActivity } = require('../services/audit');
 
@@ -175,7 +176,7 @@ const updateVisitaDateTime = async (req, res) => {
     }
 
     queryText += ' RETURNING id, taller_id, vendedor_id, captured_at AS fecha_visita, fuera_rango';
-    const result = await db.query(queryText, params);
+    const result = await transaction(client => client.query(queryText, params), req.user.id);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Visita no encontrada o sin permisos para editarla.' });
     }
@@ -216,6 +217,7 @@ const deleteVisita = async (req, res) => {
 
   try {
     await client.query('BEGIN');
+    await client.query("SELECT set_config('app.actor_id', $1, true)", [String(req.user.id)]);
     const visitResult = await client.query(
       `SELECT v.id, v.foto_url, v.programacion_id, v.vendedor_id, t.nombre AS taller_nombre,
               u.name AS vendedor_nombre

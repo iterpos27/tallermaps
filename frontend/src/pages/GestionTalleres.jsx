@@ -4,6 +4,7 @@ import { getPhotoUrl, handlePhotoError } from '../utils/photo';
 import { Search, MapPin, Calendar, User, Edit, FileText, CheckCircle, AlertTriangle, X, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../components/Modal';
 import AlertBanner from '../components/AlertBanner';
+import { RESULTS } from '../components/CommercialFields';
 
 const PAGE_SIZE = 12;
 
@@ -302,7 +303,7 @@ export default function GestionTalleres() {
                         <span>Historial</span>
                       </button>
                       {taller.is_active === false ? (
-                        <button onClick={() => handleRestore(taller)} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }} title="Restaurar Taller">
+                        <button disabled={Boolean(taller.merged_into_id)} onClick={() => handleRestore(taller)} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem', width: 'auto' }} title="Restaurar Taller">
                           <RotateCcw size={14} />
                           <span>Restaurar</span>
                         </button>
@@ -611,7 +612,7 @@ export default function GestionTalleres() {
                         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                           <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <User size={14} color="var(--primary)" />
-                            {v.vendedor_nombre}
+                            {v.vendedor_nombre} · {RESULTS[v.resultado] || 'Sin registro'}
                           </span>
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Calendar size={12} />
