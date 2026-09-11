@@ -143,12 +143,12 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     await pool.query('DELETE FROM visitas WHERE taller_id=$1',[id]);
     await pool.query('DELETE FROM talleres WHERE id=$1',[id]);
   });
-  await t.test('rechaza nuevos talleres a 49/50 m, permite 51 m y protege ediciones', async () => {
+  await t.test('rechaza nuevos talleres a 4/5 m, permite 6 m y protege ediciones', async () => {
     first = await workshop('Punto base', -1);
     assert.equal(first.status, 201, JSON.stringify(first));
     const offset = m => -1 + m / 6371000 * 180 / Math.PI;
-    for (const m of [49, 50]) assert.equal((await workshop(`Cerca ${m}`, offset(m))).status, 409);
-    const far = await workshop('Fuera 51', offset(51));
+    for (const m of [4, 5]) assert.equal((await workshop(`Cerca ${m}`, offset(m))).status, 409);
+    const far = await workshop('Fuera 6', offset(6));
     assert.equal(far.status, 201, JSON.stringify(far));
     assert.equal((await api(admin,'PUT',`/talleres/${far.body.taller.id}`, { nombre: 'Movido', latitud: -1, longitud: -80 })).status, 409);
     assert.equal((await api(admin,'PUT',`/talleres/${first.body.taller.id}`, { nombre: 'Base editada', latitud: -1, longitud: -80 })).status, 200);

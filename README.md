@@ -202,7 +202,7 @@ Los talleres nuevos registrados durante una visita quedan inicialmente **sin sec
 
 ### Validación de talleres y visitas
 
-- No se permite crear un taller a **50 metros o menos** de otro taller registrado, incluso si pertenece a otro sector o está archivado. En este último caso se debe restaurar el registro original. Esta regla también se aplica al cambiar la ubicación de un taller y al registrar talleres desde visitas o entregas; no afecta a Matriz, locales o almacenes.
+- No se permite crear un taller a **5 metros o menos** de otro taller registrado, incluso si pertenece a otro sector o está archivado. En este último caso se debe restaurar el registro original. Esta regla también se aplica al cambiar la ubicación de un taller y al registrar talleres desde visitas o entregas; no afecta a Matriz, locales o almacenes.
 - El control de duplicados se realiza en el servidor y protege las solicitudes simultáneas. Los duplicados históricos no se eliminan automáticamente.
 - El vendedor asignado puede acceder al taller sin sector hasta que el administrador lo clasifique. Después se aplican los permisos del sector.
 - Las visitas se guardan en el dispositivo antes del envío, con propietario, identificador único y hora de captura. Un reintento no crea otra visita. La fecha comercial corresponde a Ecuador y la hora de captura también se conserva con zona horaria.

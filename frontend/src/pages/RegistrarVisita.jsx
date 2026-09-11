@@ -421,7 +421,7 @@ export default function RegistrarVisita() {
                 disabled={loading}
               />
               <p className="field-help" style={{ marginTop: '8px' }}>
-                No se permite crear otro taller a 50 metros o menos de uno registrado. El administrador asignará el sector después de registrar la visita.
+                No se permite crear otro taller a 5 metros o menos de uno registrado. El administrador asignará el sector después de registrar la visita.
               </p>
               {suggestions.length > 0 && (
                 <div 

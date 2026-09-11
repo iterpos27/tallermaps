@@ -29,7 +29,7 @@ export default function MapWorkshopForm({
         <div className="modal-heading-row">
           <div>
             <h3 id="new-map-workshop-title" className="modal-title">Nuevo taller</h3>
-            <p className="modal-subtitle">Ubicación seleccionada desde el mapa. Debe estar a más de 50 metros de otro taller registrado.</p>
+            <p className="modal-subtitle">Ubicación seleccionada desde el mapa. Debe estar a más de 5 metros de otro taller registrado.</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose} disabled={saving} aria-label="Cerrar">
             <X size={20} />

@@ -20,8 +20,8 @@ Fecha de ejecución: __________ · Responsable: __________ · Versión/commit: _
 | Privacidad | Entrar con el segundo vendedor | No puede listar ni cerrar compromisos del primero | |
 | Cierre | Completar con nota de cierre; repetir el cierre | Se guarda la nota y se rechaza la repetición | |
 | Histórico | Abrir Seguimiento → Ficha del taller | Datos, fotos, vendedores, resultados y compromisos visibles | |
-| Geocerca | Intentar alta junto a un taller existente | Rechazo si la distancia calculada es 50 m o menos | |
-| Límite de 50 m | Contrastar 49/50/51 m con ubicación de referencia | ≤50 m bloqueado; >50 m permitido si nombre y demás datos son válidos | |
+| Geocerca | Intentar alta junto a un taller existente | Rechazo si la distancia calculada es 5 m o menos | |
+| Límite de 5 m | Contrastar 4/5/6 m con ubicación de referencia | ≤5 m bloqueado; >5 m permitido si nombre y demás datos son válidos | |
 | GPS denegado | Denegar ubicación y luego concederla desde ajustes del navegador | Mensaje claro y recuperación al actualizar GPS | |
 | GPS variable | Repetir captura al aire libre y bajo techo | Registrar precisión y comparar ubicación; no confundir precisión con distancia | |
 | Actualizar GPS fallido | Tener GPS, actualizar y provocar error | No reutiliza silenciosamente la ubicación anterior | |

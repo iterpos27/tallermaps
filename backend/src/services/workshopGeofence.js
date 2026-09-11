@@ -1,5 +1,5 @@
 const { rejectRequest } = require('./transactions');
-const MIN_WORKSHOP_DISTANCE_METERS = 50;
+const MIN_WORKSHOP_DISTANCE_METERS = 5;
 
 const distanceMeters = (lat1, lon1, lat2, lon2) => {
   const rad = (value) => Number(value) * Math.PI / 180;
@@ -19,7 +19,7 @@ const validateWorkshopLocation = async (client, latitude, longitude, excludedId 
     [latitude, excludedId]
   );
   if (nearby.rows.some((point) => distanceMeters(latitude, longitude, point.latitud, point.longitud) <= MIN_WORKSHOP_DISTANCE_METERS + 1e-7)) {
-    throw rejectRequest(409, 'Ya existe un taller a 50 metros o menos de esta ubicación. Seleccione el taller existente; si no aparece, solicite al administrador su asignación o restauración.');
+    throw rejectRequest(409, 'Ya existe un taller a 5 metros o menos de esta ubicación. Seleccione el taller existente; si no aparece, solicite al administrador su asignación o restauración.');
   }
 };
 

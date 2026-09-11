@@ -167,7 +167,7 @@ export default function EntregasMensajero() {
               <form onSubmit={handleRegisterWorkshopAndComplete} style={{ maxWidth: '420px', margin: '24px auto 0', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
                 <p style={{ fontWeight: 700, marginBottom: '10px' }}>Última opción: el taller todavía no está registrado</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '14px' }}>
-                  Escriba el nombre. Se guardará usando su ubicación actual y luego se confirmará esta entrega. No se permite crear otro taller a 50 metros o menos de uno registrado.
+                  Escriba el nombre. Se guardará usando su ubicación actual y luego se confirmará esta entrega. No se permite crear otro taller a 5 metros o menos de uno registrado.
                 </p>
                 <input className="form-input" value={newWorkshopName} onChange={(event) => setNewWorkshopName(event.target.value)} placeholder="Nombre del taller" required style={{ marginBottom: '12px' }} />
                 <button type="submit" className="btn btn-secondary" disabled={submitting}>

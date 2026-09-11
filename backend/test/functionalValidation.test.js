@@ -20,10 +20,10 @@ test('calendario estricto y fecha comercial de Ecuador', () => {
   assert.throws(() => validateSlot('2026-09-06', '23:50', 30));
   assert.doesNotThrow(() => validateSlot('2026-09-06', '23:30', 30));
 });
-for (const distance of [0, 49, 50, 51]) {
+for (const distance of [0, 4, 4.99, 5, 5.01, 6, 49, 50, 51]) {
   test(`geocerca de duplicados: ${distance} metros`, async () => {
     const client = { query: async (sql) => ({ rows: sql.includes('FROM talleres') ? [{ id: 1, latitud: distance / 6371000 * 180 / Math.PI, longitud: -80 }] : [] }) };
-    if (distance <= 50) await assert.rejects(validateWorkshopLocation(client, 0, -80), { status: 409 });
+    if (distance <= 5) await assert.rejects(validateWorkshopLocation(client, 0, -80), { status: 409 });
     else await assert.doesNotReject(validateWorkshopLocation(client, 0, -80));
   });
 }
