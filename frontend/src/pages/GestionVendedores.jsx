@@ -196,7 +196,7 @@ export default function GestionVendedores() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 className="page-title">Usuarios</h1>
-          <p className="page-subtitle">Cuentas, roles, sectores y accesos</p>
+          <p className="page-subtitle">Cuentas, roles, sectores y permisos de acceso</p>
         </div>
         <button 
           onClick={() => setIsCreateModalOpen(true)}
@@ -229,6 +229,9 @@ export default function GestionVendedores() {
           <Users size={20} color="var(--primary)" />
           <span>Usuarios del sistema</span>
         </h2>
+        <p className="page-subtitle" style={{ marginBottom: '20px' }}>
+          Usa el escudo de la columna Permisos para elegir qué opciones puede usar cada vendedor o mensajero. Los administradores tienen acceso completo.
+        </p>
 
         {loading ? (
           <div className="loading-overlay" style={{ minHeight: '200px' }}>
@@ -245,6 +248,7 @@ export default function GestionVendedores() {
                   <th scope="col">Rol</th>
                   <th scope="col">Sectores</th>
                   <th scope="col">Estado</th>
+                  <th scope="col">Permisos</th>
                   <th scope="col" style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
               </thead>
@@ -295,9 +299,17 @@ export default function GestionVendedores() {
                           {isActive ? 'Activo' : 'Desactivado'}
                         </span>
                       </td>
+                      <td>
+                        {u.role === 'ADMIN' ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Acceso completo</span>
+                        ) : (
+                          <button type="button" className="btn btn-secondary" style={{ width: 40, height: 40, padding: 0 }} onClick={() => setPermissionUser(u)} title="Configurar permisos de acceso" aria-label={`Permisos de ${u.name}`}>
+                            <ShieldCheck size={17} aria-hidden="true" />
+                          </button>
+                        )}
+                      </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
-                          {u.role !== 'ADMIN' && <button type="button" className="btn btn-secondary" style={{width:40,height:40,padding:0}} onClick={()=>setPermissionUser(u)} title="Permisos de acceso" aria-label={`Permisos de ${u.name}`}><ShieldCheck size={17} /></button>}
                           <button
                             type="button"
                             onClick={() => handleEditClick(u)}
