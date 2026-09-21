@@ -1,3 +1,4 @@
+import { can, canVisit } from '../utils/permissions';
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -42,7 +43,6 @@ const adminGroups = [
 const adminLinks = adminGroups.flatMap((g) => g.links);
 
 const vendedorLinks = [
-  { to: '/seguimiento', label: 'Seguimiento', icon: CalendarDays },
   { to: '/dashboard', label: 'Inicio', mobileLabel: 'Inicio', icon: Home },
   { to: '/mi-ruta', label: 'Mi ruta de hoy', mobileLabel: 'Mi ruta', icon: Route },
   { to: '/programar-visitas', label: 'Programar', mobileLabel: 'Agenda', icon: CalendarDays },
@@ -98,7 +98,7 @@ export default function DashboardLayout({ children }) {
 
   useEffect(() => {
     const handleSync = async () => {
-      if (navigator.onLine && !syncRunningRef.current) {
+      if (can(getUser(), 'register') && navigator.onLine && !syncRunningRef.current) {
         syncRunningRef.current = true;
         try {
           const pending = await offlineStorage.getPendingVisits();
@@ -172,7 +172,7 @@ export default function DashboardLayout({ children }) {
   if (!user) return null;
 
   const isAdmin = user.role === 'ADMIN';
-  const activeLinks = isAdmin ? adminLinks : (user.role === 'MENSAJERO' ? mensajeroLinks : vendedorLinks);
+  const activeLinks = isAdmin ? adminLinks : (user.role === 'MENSAJERO' ? mensajeroLinks : vendedorLinks).filter(link => canVisit(user, link.to));
   const { primary: mobilePrimary, secondary: mobileSecondary } = getMobileNavSplit(activeLinks);
   const hasMoreMenu = mobileSecondary.length > 0;
   const isMoreActive = mobileSecondary.some((l) => location.pathname === l.to);
@@ -240,7 +240,7 @@ export default function DashboardLayout({ children }) {
         </header>
 
         <main className="main-content">
-          {user.role === 'MENSAJERO' && <MessengerTracker />}
+          {user.role === 'MENSAJERO' && can(user, 'delivery') && <MessengerTracker />}
           {syncStatus && (
             <div className={`alert ${isOnline ? 'alert-success' : 'alert-danger'} sync-banner`} role="status">
               <span>{syncStatus}</span>

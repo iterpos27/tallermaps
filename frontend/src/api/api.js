@@ -124,6 +124,7 @@ export const api = {
   },
   
   users: {
+    permissions: (id, permissions) => makeRequest(`/users/${id}/permissions`, {method: 'PUT', body: JSON.stringify({permissions})}),
     list: () => 
       makeRequest('/users', { method: 'GET' }),
     create: (userData) => 

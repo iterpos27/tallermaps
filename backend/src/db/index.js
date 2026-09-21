@@ -433,7 +433,7 @@ async function initializeSchema(dbClient, shouldConnect = false) {
     await dbClient.query('BEGIN');
     try {
       await dbClient.query('SELECT pg_advisory_xact_lock(74000)');
-      for (const version of ['002_functional_validation', '003_reports', '004_commercial']) {
+      for (const version of ['002_functional_validation', '003_reports', '004_commercial', '005_user_permissions']) {
         const applied = await dbClient.query('SELECT 1 FROM schema_migrations WHERE version = $1', [version]);
         if (!applied.rows.length) {
           await dbClient.query(fs.readFileSync(path.join(__dirname, 'migrations', `${version}.sql`), 'utf8'));

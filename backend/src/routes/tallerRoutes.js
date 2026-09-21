@@ -1,3 +1,4 @@
+const { requirePermission } = require('../services/permissions');
 const { validateInput, validateId } = require('../middlewares/validateInput');
 const express = require('express');
 const router = express.Router();
@@ -10,13 +11,13 @@ router.use(validateInput);
 router.param('id', validateId);
 
 // GET /api/talleres
-router.get('/', tallerController.getTalleres);
+router.get('/', requirePermission('register','schedule','route','history','map','delivery'), tallerController.getTalleres);
 
 // POST /api/talleres
-router.post('/', tallerController.createTaller);
+router.post('/', requirePermission('register','map','delivery'), tallerController.createTaller);
 
 // GET /api/talleres/:id
-router.get('/:id', tallerController.getTallerById);
+router.get('/:id', requirePermission('register','schedule','route','history','map','delivery'), tallerController.getTallerById);
 
 // PUT /api/talleres/:id (Only ADMIN can edit workshop details)
 router.put('/:id', authorizeRoles('ADMIN'), tallerController.updateTaller);
@@ -28,6 +29,6 @@ router.delete('/:id', authorizeRoles('ADMIN'), tallerController.deleteTaller);
 router.post('/:id/restore', authorizeRoles('ADMIN'), tallerController.restoreTaller);
 
 // GET /api/talleres/:id/visitas (List visits history for a single workshop)
-router.get('/:id/visitas', authorizeRoles(['ADMIN', 'VENDEDOR']), tallerController.getTallerVisitas);
+router.get('/:id/visitas', authorizeRoles('ADMIN'), tallerController.getTallerVisitas);
 
 module.exports = router;

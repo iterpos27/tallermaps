@@ -1,35 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Calendar, ClipboardList, Edit3, Play, Search, Trash2 } from 'lucide-react';
+import { Calendar, ClipboardList, Search } from 'lucide-react';
 import { api } from '../api/api';
 import AlertBanner from '../components/AlertBanner';
-import Modal from '../components/Modal';
-
-const pad = (value) => String(value).padStart(2, '0');
-
-const splitLocalDateTime = (value) => {
-  const date = new Date(value);
-  return {
-    fecha: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    hora: `${pad(date.getHours())}:${pad(date.getMinutes())}`
-  };
-};
 
 export default function MisVisitas() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [visitas, setVisitas] = useState([]);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [editingVisit, setEditingVisit] = useState(null);
-  const [editDate, setEditDate] = useState('');
-  const [editTime, setEditTime] = useState('');
-  const [deletingVisit, setDeletingVisit] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
-
   const fetchVisitas = async () => {
     setLoading(true);
     try {
@@ -57,65 +37,16 @@ export default function MisVisitas() {
     setFechaFin('');
   };
 
-  const handlePerformVisit = (visita) => {
-    navigate(`/registrar-visita?taller_id=${visita.taller_id}`);
-  };
-
-  const openEditModal = (visita) => {
-    const dateTime = splitLocalDateTime(visita.fecha_visita);
-    setEditingVisit(visita);
-    setEditDate(dateTime.fecha);
-    setEditTime(dateTime.hora);
-    setError('');
-    setSuccess('');
-  };
-
-  const handleEditSubmit = async (event) => {
-    event.preventDefault();
-    if (!editingVisit || !editDate || !editTime) return;
-
-    setActionLoading(true);
-    setError('');
-    try {
-      await api.visitas.updateDateTime(editingVisit.id, { fecha: editDate, hora: editTime });
-      setEditingVisit(null);
-      setSuccess('Fecha y hora de la visita actualizadas correctamente.');
-      await fetchVisitas();
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo actualizar la visita.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deletingVisit) return;
-
-    setActionLoading(true);
-    setError('');
-    try {
-      await api.visitas.delete(deletingVisit.id);
-      setVisitas((current) => current.filter((visita) => visita.id !== deletingVisit.id));
-      setSuccess(`La visita a ${deletingVisit.taller_nombre} fue eliminada.`);
-      setDeletingVisit(null);
-    } catch (requestError) {
-      setError(requestError.message || 'No se pudo eliminar la visita.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header field-hero">
         <div>
           <h1 className="page-title">Mis visitas</h1>
-          <p className="page-subtitle">Historial de visitas realizadas</p>
+          <p className="page-subtitle">Consulte sus visitas, fechas y observaciones en un solo lugar</p>
         </div>
       </div>
 
-      <AlertBanner type="success" style={{ marginBottom: '20px' }}>{success}</AlertBanner>
-      <AlertBanner style={{ marginBottom: '20px' }}>{!editingVisit && !deletingVisit ? error : ''}</AlertBanner>
+      <AlertBanner style={{ marginBottom: '20px' }}>{error}</AlertBanner>
 
       <div className="filter-bar glass-panel">
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -152,7 +83,7 @@ export default function MisVisitas() {
                 <th>Taller</th>
                 <th>Fecha</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                <th>Observaciones</th>
               </tr>
             </thead>
             <tbody>
@@ -173,17 +104,7 @@ export default function MisVisitas() {
                       </span>
                     </td>
                     <td>
-                      <div className="visit-table-actions">
-                        <button type="button" className="btn btn-primary" onClick={() => handlePerformVisit(visita)} title="Realizar visita" aria-label={`Realizar visita en ${visita.taller_nombre}`}>
-                          <Play size={16} />
-                        </button>
-                        <button type="button" className="btn btn-secondary" onClick={() => openEditModal(visita)} title="Editar fecha y hora" aria-label={`Editar visita a ${visita.taller_nombre}`}>
-                          <Edit3 size={16} />
-                        </button>
-                        <button type="button" className="btn btn-danger" onClick={() => { setDeletingVisit(visita); setError(''); setSuccess(''); }} title="Eliminar visita" aria-label={`Eliminar visita a ${visita.taller_nombre}`}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                      <span className="visit-observation">{visita.observacion || 'Sin observaciones'}</span>
                     </td>
                   </tr>
                 );
@@ -193,45 +114,6 @@ export default function MisVisitas() {
         </div>
       )}
 
-      {editingVisit && (
-        <Modal onClose={() => !actionLoading && setEditingVisit(null)} labelledBy="edit-visit-date-title" maxWidth="440px">
-          <h2 id="edit-visit-date-title" style={{ color: 'var(--primary)', fontSize: '1.15rem', marginBottom: '6px' }}>Editar fecha y hora</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginBottom: '18px' }}>{editingVisit.taller_nombre}</p>
-          <AlertBanner style={{ marginBottom: '16px' }}>{error}</AlertBanner>
-          <form onSubmit={handleEditSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label">Fecha</label>
-                <input type="date" className="form-input" value={editDate} onChange={(event) => setEditDate(event.target.value)} required disabled={actionLoading} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Hora</label>
-                <input type="time" className="form-input" value={editTime} onChange={(event) => setEditTime(event.target.value)} required disabled={actionLoading} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => setEditingVisit(null)} disabled={actionLoading}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }} disabled={actionLoading}>{actionLoading ? 'Guardando...' : 'Guardar'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {deletingVisit && (
-        <Modal onClose={() => !actionLoading && setDeletingVisit(null)} labelledBy="delete-visit-title" maxWidth="440px">
-          <h2 id="delete-visit-title" style={{ color: 'var(--danger)', fontSize: '1.15rem', marginBottom: '10px' }}>¿Eliminar visita?</h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '18px' }}>
-            Se eliminará la visita a <strong style={{ color: 'var(--text-dark)' }}>{deletingVisit.taller_nombre}</strong>. Si estaba vinculada a una programación, volverá a quedar pendiente.
-          </p>
-          <AlertBanner style={{ marginBottom: '16px' }}>{error}</AlertBanner>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button type="button" className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => setDeletingVisit(null)} disabled={actionLoading}>Cancelar</button>
-            <button type="button" className="btn btn-danger" style={{ width: 'auto' }} onClick={handleDelete} disabled={actionLoading}>
-              <Trash2 size={16} />{actionLoading ? 'Eliminando...' : 'Eliminar'}
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

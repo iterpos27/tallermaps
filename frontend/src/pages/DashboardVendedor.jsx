@@ -1,3 +1,4 @@
+import { can, canVisit } from '../utils/permissions';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarDays, ClipboardList, Clock3, PlusCircle, Route } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function DashboardVendedor() {
   useEffect(() => {
     const fetchProgramaciones = async () => {
       try {
+        if (!can(user, 'route') && !can(user, 'schedule') && !can(user, 'register')) return;
         const now = new Date();
         const offset = now.getTimezoneOffset() * 60000;
         const today = new Date(now.getTime() - offset).toISOString().slice(0, 10);
@@ -71,7 +73,7 @@ export default function DashboardVendedor() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header field-hero">
         <div>
           <h1 className="page-title">Bienvenido, {user?.name}</h1>
           <p className="page-subtitle">Su jornada de visitas</p>
@@ -92,7 +94,7 @@ export default function DashboardVendedor() {
       ) : (
         <>
           <div className="stats-grid seller-summary-grid" style={{ marginBottom: '36px' }}>
-            {summaryCards.map((card) => {
+            {summaryCards.filter(card => canVisit(user, card.to)).map((card) => {
               const CardIcon = card.icon;
               return (
                 <Link
@@ -119,13 +121,13 @@ export default function DashboardVendedor() {
           <section>
             <h2 style={{ fontSize: '1.18rem', fontWeight: 700, marginBottom: '16px' }}>Acciones</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-              {actions.map((action) => {
+              {actions.filter(action => canVisit(user, action.to)).map((action) => {
                 const ActionIcon = action.icon;
                 return (
                   <Link
                     key={action.label}
                     to={action.to}
-                    className="glass-panel"
+                    className="glass-panel field-action"
                     style={{ padding: '20px', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '14px' }}
                   >
                     <div className="stat-icon-wrapper stat-icon-primary" style={{ flexShrink: 0 }}>

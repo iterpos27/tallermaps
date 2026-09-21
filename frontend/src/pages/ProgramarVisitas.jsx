@@ -160,7 +160,7 @@ export default function ProgramarVisitas() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header field-hero">
         <div>
           <h1 className="page-title">{estadoFilter ? 'Visitas pendientes' : 'Programar visitas semanales'}</h1>
           <p className="page-subtitle">Cada visita puede durar como máximo 30 minutos</p>

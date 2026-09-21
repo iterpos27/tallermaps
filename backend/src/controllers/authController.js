@@ -86,7 +86,8 @@ const login = async (req, res) => {
         name: user.name,
         email: user.email,
         username: user.username,
-        role: user.role
+        role: user.role,
+        permissions: user.permissions
       }
     });
 
@@ -101,7 +102,7 @@ const login = async (req, res) => {
 const getSession = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, email, username, role, is_active
+      `SELECT id, name, email, username, role, is_active, permissions
        FROM users
        WHERE id = $1`,
       [req.user.id]

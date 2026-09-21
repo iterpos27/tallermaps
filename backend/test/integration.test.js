@@ -27,11 +27,12 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
   const commercialMigration=fs.readFileSync(path.join(__dirname,'../src/db/migrations/004_commercial.sql'),'utf8');
   await pool.query(commercialMigration);
   await pool.query(commercialMigration);
+  await pool.query(fs.readFileSync(path.join(__dirname,'../src/db/migrations/005_user_permissions.sql'),'utf8'));
   const express = require('express');
   const jwt = require('jsonwebtoken');
   const app = express();
   app.use(express.json());
-  for (const [route, file] of [['comercial','commercial'],['visitas','visita'],['talleres','taller'],['programaciones','programacion'],['users','user'],['entregas','entrega']]) {
+  for (const [route, file] of [['mapa','mapa'],['comercial','commercial'],['visitas','visita'],['talleres','taller'],['programaciones','programacion'],['users','user'],['entregas','entrega']]) {
     app.use(`/api/${route}`, require(`../src/routes/${file}Routes`));
   }
   const server = app.listen(0, '127.0.0.1');
@@ -67,6 +68,28 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     form.append('foto', new Blob(['test image'], { type: 'image/jpeg' }), 'test.jpg');
     return form;
   };
+  await t.test('permisos por usuario, revocación y límites de rol', async () => {
+    assert.equal((await api(seller,'GET','/mapa/puntos')).status,403);
+    assert.equal((await api(seller,'DELETE','/visitas/1')).status,403);
+    assert.equal((await api(seller,'PUT','/visitas/1/fecha',{})).status,403);
+    assert.equal((await api(seller,'PUT','/programaciones/1',{})).status,403);
+    assert.equal((await api(messenger,'POST','/programaciones',{})).status,403);
+    assert.equal((await api(seller,'PUT','/users/'+seller.id+'/permissions',{permissions:{map:true}})).status,403);
+    const person=(await pool.query("INSERT INTO users(name,email,username,password_hash,role) VALUES('Permissions','permissions@example.test','permissions','unused','VENDEDOR') RETURNING *")).rows[0];
+    assert.equal((await api(admin,'PUT','/users/'+person.id+'/permissions',{permissions:{map:'true'}})).status,400);
+    assert.equal((await api(admin,'PUT','/users/'+messenger.id+'/permissions',{permissions:{schedule:true}})).status,400);
+    assert.equal((await api(admin,'PUT','/users/'+person.id+'/permissions',{permissions:{map:true,register:false,schedule:false,history:false}})).status,200);
+    assert.equal((await api(person,'GET','/mapa/puntos')).status,401);
+    const current=jwt.sign({id:person.id,session_version:1},process.env.JWT_SECRET);
+    assert.equal((await api(current,'GET','/mapa/puntos')).status,200);
+    assert.equal((await api(current,'GET','/visitas')).status,403);
+    assert.equal((await api(current,'POST','/visitas',{})).status,403);
+    assert.equal((await api(current,'POST','/programaciones',{})).status,403);
+    assert.equal((await api(current,'GET','/comercial/compromisos')).status,403);
+    const courier=(await pool.query("INSERT INTO users(name,email,username,password_hash,role,permissions) VALUES('Courier denied','courierdenied@example.test','courierdenied','unused','MENSAJERO','{\"delivery\":false}') RETURNING *")).rows[0];
+    for (const endpoint of ['position','complete','cancel']) assert.equal((await api(courier,'POST','/entregas/'+endpoint,{})).status,403);
+    assert.equal((await api(courier,'GET','/entregas/status')).status,403);
+  });
   let first;
   await t.test('resultado y compromiso son atómicos, idempotentes y privados', async () => {
     const key=randomUUID();
@@ -75,16 +98,17 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     assert.equal(saved.status,201,JSON.stringify(saved));
     assert.equal(saved.body.visita.resultado,'SEGUIMIENTO');
     assert.equal((await api(seller,'POST','/visitas',form())).status,200);
-    const list=await api(seller,'GET','/comercial/compromisos');
+    const list=await api(admin,'GET','/comercial/compromisos');
     assert.equal(list.body.length,1);
-    assert.equal((await api(other,'GET','/comercial/compromisos')).body.length,0);
+    assert.equal((await api(other,'GET','/comercial/compromisos')).status,403);
+    assert.equal((await api(seller,'GET','/comercial/compromisos')).status,403);
     assert.equal((await api(messenger,'GET','/comercial/compromisos')).status,403);
     const commitment=list.body[0];
-    assert.equal((await api(other,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cierre sin autorización'})).status,404);
-    assert.equal((await api(seller,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cotización enviada al cliente'})).status,200);
-    assert.equal((await api(seller,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Intento repetido de cierre'})).status,409);
+    assert.equal((await api(other,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cierre sin autorización'})).status,403);
+    assert.equal((await api(admin,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Cotización enviada al cliente'})).status,200);
+    assert.equal((await api(admin,'PUT',`/comercial/compromisos/${commitment.id}`,{estado:'COMPLETADO',cierre:'Intento repetido de cierre'})).status,409);
     const audit=(await pool.query("SELECT * FROM activity_logs WHERE action='compromisos_UPDATE' AND entity_id=$1",[String(commitment.id)])).rows[0];
-    assert.equal(audit.user_id,seller.id);assert.equal(audit.details.antes.estado,'PENDIENTE');assert.equal(audit.details.despues.estado,'COMPLETADO');
+    assert.equal(audit.user_id,admin.id);assert.equal(audit.details.antes.estado,'PENDIENTE');assert.equal(audit.details.despues.estado,'COMPLETADO');
     for(const values of [{resultado:'INVALIDO'},{resultado:'SEGUIMIENTO'},{resultado:'SEGUIMIENTO',compromiso:'Enviar cotización de prueba',proxima_fecha:'2025-12-31'}]) {
       assert.equal((await api(seller,'POST','/visitas',visitForm({taller_nombre:'No crear',latitud:-21,...values}))).status,400);
     }
@@ -92,9 +116,9 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     const metrics=await api(admin,'GET','/comercial/indicadores?fecha_inicio=2026-01-01&fecha_fin=2026-01-03');
     assert.equal(metrics.status,200);assert.equal(metrics.body.find(m=>m.id===seller.id).visitas,1);
     assert.equal((await api(seller,'GET','/comercial/indicadores?fecha_inicio=2026-01-01&fecha_fin=2026-01-03')).status,403);
-    assert.equal((await api(seller,'PUT',`/visitas/${saved.body.visita.id}/fecha`,{fecha:'2026-01-02',hora:'10:30'})).status,200);
+    assert.equal((await api(admin,'PUT',`/visitas/${saved.body.visita.id}/fecha`,{fecha:'2026-01-02',hora:'10:30'})).status,200);
     const changed=(await pool.query("SELECT * FROM activity_logs WHERE action='visitas_UPDATE' AND entity_id=$1",[String(saved.body.visita.id)])).rows[0];
-    assert.equal(changed.user_id,seller.id);assert.ok(changed.details.antes.fecha_visita!==changed.details.despues.fecha_visita);
+    assert.equal(changed.user_id,admin.id);assert.ok(changed.details.antes.fecha_visita!==changed.details.despues.fecha_visita);
   });
   await t.test('revisión de duplicados antiguos no altera sus visitas', async () => {
     const pair=(await pool.query("INSERT INTO talleres(nombre,latitud,longitud) VALUES('Legacy A',-30,-80),('Legacy B',-30.0001,-80) RETURNING id")).rows;
@@ -181,10 +205,10 @@ test('API y PostgreSQL: validaciones, concurrencia y transacciones', { skip: !pr
     scheduled=await api(seller,'POST','/programaciones',data);
     assert.equal(scheduled.status,201,JSON.stringify(scheduled));
     const id=scheduled.body.programacion.id;
-    assert.equal((await api(seller,'PUT',`/programaciones/${id}`,{ fecha_programada:'2026-02-30' })).status,400);
-    assert.equal((await api(seller,'PUT',`/programaciones/${id}`,{ estado:'CANCELADA' })).status,200);
+    assert.equal((await api(admin,'PUT',`/programaciones/${id}`,{ fecha_programada:'2026-02-30' })).status,400);
+    assert.equal((await api(admin,'PUT',`/programaciones/${id}`,{ estado:'CANCELADA' })).status,200);
     assert.equal((await api(seller,'POST','/programaciones',{...data,hora_programada:'10:15'})).status,201);
-    assert.equal((await api(seller,'PUT',`/programaciones/${id}`,{ estado:'PENDIENTE' })).status,409);
+    assert.equal((await api(admin,'PUT',`/programaciones/${id}`,{ estado:'PENDIENTE' })).status,409);
     const results=await Promise.all(['11:00','11:15'].map(hora_programada=>api(seller,'POST','/programaciones',{...data,hora_programada})));
     assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
   });

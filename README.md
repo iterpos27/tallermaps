@@ -235,9 +235,9 @@ El navegador no registra ubicaciones cuando está cerrado. Para detectar la sali
 
 ## Seguimiento comercial y auditoría
 
-**Nueva visita** incluye resultado comercial y, opcionalmente, próxima fecha y compromiso. El resultado Seguimiento exige ambos. Los registros de versiones anteriores siguen sincronizando como Sin registro cuando no incluyen resultado. La fecha del compromiso no puede ser anterior a la captura de la visita.
+**Nueva visita** solicita taller, ubicación, fotografía y observación. Los campos comerciales ya no se muestran al vendedor. Los resultados y compromisos históricos se conservan, incluidos los capturados por versiones anteriores y todavía pendientes de sincronizar.
 
-**Seguimiento** permite consultar pendientes/vencidos/cerrados, crear compromisos y cerrar con nota. Cada vendedor solo accede a sus compromisos; el administrador accede a todos. La ficha muestra contactos, fotos, visitas, resultados y compromisos. La fecha del compromiso es un recordatorio comercial, no reserva una franja en la agenda: las visitas con horario se crean desde Programación.
+**Seguimiento** permite consultar pendientes/vencidos/cerrados, crear compromisos y cerrar con nota. Este módulo está reservado al administrador. La ficha muestra contactos, fotos, visitas, resultados y compromisos. La fecha del compromiso es un recordatorio comercial, no reserva una franja en la agenda: las visitas con horario se crean desde Programación.
 
 **Reportes** añade indicadores por vendedor, Excel con resumen y PDF paginado, además de CSV. El cumplimiento es programaciones ejecutadas / programaciones no canceladas del período. Ventas cuenta visitas marcadas Venta realizada; no representa facturación ni monto vendido. Las bibliotecas de exportación se cargan cuando se utilizan.
 
@@ -266,3 +266,12 @@ Para mañana, seguir [PRUEBAS_CAMPO.md](PRUEBAS_CAMPO.md). Las pruebas de GPS re
 
 - Migrar fotos a almacenamiento de objetos como Cloudflare R2 o S3 si el volumen crece.
 - Integrar un servicio externo de alertas y trazas si aumenta el volumen de usuarios.
+
+
+## Permisos por usuario
+
+En **Usuarios → icono de escudo**, el administrador habilita las opciones de cada vendedor o mensajero. El vendedor dispone de ruta del día, programación, registro, historial y pendientes; Mapa y rutas está deshabilitado por defecto. El mensajero solo puede recibir acceso al módulo de entregas. Seguimiento y edición/eliminación de registros quedan reservados al administrador.
+
+Los permisos se aplican al menú, rutas y API. Guardarlos revoca la sesión anterior; el usuario debe iniciar sesión nuevamente. Los cambios de rol restablecen los permisos predeterminados del nuevo rol. La migración `005_user_permissions` se aplica al iniciar.
+
+Mis visitas es un historial de consulta: no incluye iniciar, editar ni eliminar. Mi ruta de hoy es una agenda de consulta; la evidencia se registra desde Registrar visita. Los pendientes locales conservan sus datos y permiten reintentar la sincronización, sin editar ni descartar desde la interfaz del vendedor.

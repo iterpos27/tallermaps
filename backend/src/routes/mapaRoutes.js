@@ -1,10 +1,11 @@
+const { requirePermission } = require('../services/permissions');
 const express = require('express');
 const router = express.Router();
 const mapaController = require('../controllers/mapaController');
 const { authenticateToken } = require('../middlewares/auth');
 
 // Protect all map routes
-router.use(authenticateToken);
+router.use(authenticateToken, requirePermission('map'));
 
 // GET /api/mapa/puntos
 router.get('/puntos', mapaController.getPuntosMapa);

@@ -1,3 +1,5 @@
+import { can, canVisit } from './utils/permissions';
+import { useLocation } from 'react-router-dom';
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { hasSession, getUser } from './api/api';
@@ -31,6 +33,7 @@ const MiRutaHoy = lazy(() => import('./pages/MiRutaHoy'));
  * Route Guard for authenticated users
  */
 function ProtectedRoute({ children, allowedRoles }) {
+  const { pathname } = useLocation();
   const sessionAvailable = hasSession();
   const user = getUser();
 
@@ -42,6 +45,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  if (!canVisit(user, pathname)) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -56,7 +60,7 @@ function CentralDashboard() {
     return <DashboardAdmin />;
   }
   if (user?.role === 'MENSAJERO') {
-    return <EntregasMensajero />;
+    return can(user, 'delivery') ? <EntregasMensajero /> : <div className="glass-panel permission-empty"><h1>Bienvenido, {user.name}</h1><p>El administrador todavía no ha habilitado opciones para su usuario.</p></div>;
   }
   
   return <DashboardVendedor />;
@@ -135,7 +139,7 @@ export default function App() {
         />
 
         {/* Admin-Only Routes */}
-        <Route path="/seguimiento" element={<ProtectedRoute allowedRoles={['ADMIN','VENDEDOR']}><DashboardLayout><Seguimiento /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/seguimiento" element={<ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><Seguimiento /></DashboardLayout></ProtectedRoute>} />
         <Route path="/reportes" element={<ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><Reportes /></DashboardLayout></ProtectedRoute>} />
         <Route
           path="/entregas"

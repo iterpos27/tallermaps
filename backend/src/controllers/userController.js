@@ -37,7 +37,7 @@ const replaceUserSectors = async (queryable, userId, role, sectorIdsInput) => {
 const getUsers = async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT u.id, u.name, u.email, u.username, u.role, u.is_active, u.created_at,
+      SELECT u.id, u.name, u.email, u.username, u.role, u.is_active, u.created_at, u.permissions,
              COALESCE(ARRAY_AGG(s.id ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '{}') AS sector_ids,
              COALESCE(ARRAY_AGG(s.nombre ORDER BY s.nombre) FILTER (WHERE s.id IS NOT NULL), '{}') AS sectores
       FROM users u
@@ -290,6 +290,7 @@ const updateUser = async (req, res) => {
     const result = await transactionClient.query(
       `UPDATE users 
        SET name = $1, email = $2, username = $3, role = $4::text, is_active = $5::boolean,
+           permissions = CASE WHEN role <> $4 THEN '{}'::jsonb ELSE permissions END,
            session_version = session_version + CASE WHEN role <> $4 OR is_active <> $5 THEN 1 ELSE 0 END
        WHERE id = $6 
        RETURNING id, name, email, username, role, is_active, created_at`,

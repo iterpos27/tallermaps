@@ -38,7 +38,7 @@ const authenticateToken = async (req, res, next) => {
     });
   }
   try {
-    const result = await db.query('SELECT id, name, email, username, role, is_active, session_version FROM users WHERE id = $1', [decoded.id]);
+    const result = await db.query('SELECT id, name, email, username, role, is_active, session_version, permissions FROM users WHERE id = $1', [decoded.id]);
     const user = result.rows[0];
     if (!user || !user.is_active || Number(decoded.session_version || 0) !== Number(user.session_version)) {
       return res.status(401).json({ error: 'La sesión ya no está disponible. Inicie sesión nuevamente.' });

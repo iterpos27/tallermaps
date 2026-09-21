@@ -135,7 +135,7 @@ export default function EntregasMensajero() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header field-hero">
         <div>
           <h1 className="page-title">Hola, {user?.name}</h1>
           <p className="page-subtitle">Control automático del tiempo entre salida y entrega</p>

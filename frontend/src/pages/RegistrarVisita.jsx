@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, MapPin, CheckCircle, AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { api, offlineStorage, getUser } from '../api/api';
 import { compressImage } from '../utils/image';
-import CommercialFields from '../components/CommercialFields';
 
 const MIN_OBSERVATION_LENGTH = 10;
 
@@ -20,7 +19,6 @@ export default function RegistrarVisita() {
   const [selectedTallerId, setSelectedTallerId] = useState(() => searchParams.get('taller_id') || '');
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
   const [observacion, setObservacion] = useState('');
-  const [commercial, setCommercial] = useState({ resultado:'', proxima_fecha:'', compromiso:'' });
   const [suggestions, setSuggestions] = useState([]);
   
   // Image states
@@ -235,7 +233,6 @@ export default function RegistrarVisita() {
       formData.append('latitud', coords.latitude);
       formData.append('longitud', coords.longitude);
       formData.append('observacion', observacion.trim());
-      for (const [key,value] of Object.entries(commercial)) formData.append(key,value);
       if (selectedProgramacionId) {
         formData.append('programacion_id', selectedProgramacionId);
       }
@@ -244,7 +241,6 @@ export default function RegistrarVisita() {
       // Persist before sending: a closed tab or lost response must not lose the operation ID.
       await offlineStorage.savePendingVisit({
         ...requestRef.current,
-        ...commercial,
         taller_id: tallerMode === 'existente' ? selectedTallerId : null,
         taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
         latitud: coords.latitude, longitud: coords.longitude, observacion: observacion.trim(),
@@ -267,7 +263,6 @@ export default function RegistrarVisita() {
         try {
           await offlineStorage.savePendingVisit({
             ...requestRef.current,
-            ...commercial,
             taller_id: tallerMode === 'existente' ? selectedTallerId : null,
             taller_nombre: tallerMode === 'nuevo' ? nuevoTallerNombre.trim() : talleres.find(t => t.id == selectedTallerId)?.nombre,
             latitud: coords.latitude,
@@ -297,7 +292,7 @@ export default function RegistrarVisita() {
 
   return (
     <div className="camera-module">
-      <div className="page-header" style={{ marginBottom: '20px' }}>
+      <div className="page-header field-hero" style={{ marginBottom: '20px' }}>
         <div>
           <h1 className="page-title">Nueva visita</h1>
           <p className="page-subtitle">Ubicación, evidencia y observaciones</p>
@@ -492,7 +487,6 @@ export default function RegistrarVisita() {
           </div>
         </div>
 
-        <CommercialFields value={commercial} onChange={setCommercial} disabled={loading} />
         {/* Camera / Photo module */}
         <div className="form-group">
           <label className="form-label">Foto de Fachada/Lugar</label>

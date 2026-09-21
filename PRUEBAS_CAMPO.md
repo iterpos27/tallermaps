@@ -13,27 +13,26 @@ Fecha de ejecución: __________ · Responsable: __________ · Versión/commit: _
 
 | Caso | Pasos | Resultado esperado | Resultado real / evidencia |
 |---|---|---|---|
-| Visita normal | Elegir taller, foto, observación y resultado Interesado | Una visita con vendedor, fecha y foto correctos | |
-| Venta | Registrar resultado Venta realizada | Aumenta el indicador de ventas y aparece en Excel/PDF | |
-| Seguimiento | Seleccionar Seguimiento sin fecha o compromiso | Bloquea el formulario | |
-| Compromiso válido | Registrar fecha futura y descripción de al menos 10 caracteres | Un compromiso pendiente asociado a la visita y vendedor | |
+| Visita normal | Elegir taller, foto y observación | Una visita con vendedor, fecha y foto correctos | |
+| Seguimiento | Ingresar como vendedor y mensajero | No aparece Seguimiento; acceso directo bloqueado | |
+| Permisos | Desactivar Programar para un vendedor y volver a iniciar sesión | Menú y acción ocultos; API rechaza nuevas programaciones | |
 | Privacidad | Entrar con el segundo vendedor | No puede listar ni cerrar compromisos del primero | |
 | Cierre | Completar con nota de cierre; repetir el cierre | Se guarda la nota y se rechaza la repetición | |
-| Histórico | Abrir Seguimiento → Ficha del taller | Datos, fotos, vendedores, resultados y compromisos visibles | |
+| Histórico | Como administrador, abrir Seguimiento → Ficha del taller | Datos, fotos, vendedores, resultados y compromisos visibles | |
 | Geocerca | Intentar alta junto a un taller existente | Rechazo si la distancia calculada es 5 m o menos | |
 | Límite de 5 m | Contrastar 4/5/6 m con ubicación de referencia | ≤5 m bloqueado; >5 m permitido si nombre y demás datos son válidos | |
 | GPS denegado | Denegar ubicación y luego concederla desde ajustes del navegador | Mensaje claro y recuperación al actualizar GPS | |
 | GPS variable | Repetir captura al aire libre y bajo techo | Registrar precisión y comparar ubicación; no confundir precisión con distancia | |
 | Actualizar GPS fallido | Tener GPS, actualizar y provocar error | No reutiliza silenciosamente la ubicación anterior | |
 | Foto | Probar cámara, imagen grande y archivo no válido | Imagen válida se procesa; error comprensible si falla | |
-| Sin conexión | Con página abierta, activar modo avión y registrar visita con compromiso | Se conserva localmente, con foto y campos comerciales | |
+| Sin conexión | Con página abierta, activar modo avión y registrar visita | Se conserva localmente, con foto y observaciones | |
 | Cerrar y abrir | Cerrar navegador con visita pendiente; recuperar internet, entrar con la misma cuenta | La visita sigue pendiente o se sincroniza una sola vez | |
 | Reintento | Cortar conexión después de enviar y luego sincronizar varias veces | No duplica visita, taller ni compromiso | |
 | Cambio de cuenta | Guardar pendiente y entrar con otra cuenta | No sincroniza los registros de otro vendedor | |
 | Conflicto offline | Otro vendedor crea primero un taller cercano | El pendiente queda para corrección, conservando datos y foto | |
 | Reportes | Semana actual, semana que cruza año, rango de un día y vendedor | Fechas inclusivas; totales corresponden a las filas | |
 | Exportar | Descargar CSV, Excel y PDF con más de 50 filas | Incluye todas las filas, acentos, observaciones y páginas necesarias | |
-| Auditoría | Cambiar fecha de visita/datos de taller; cerrar compromiso | Actividad muestra autor, valores anteriores y nuevos | |
+| Auditoría | Como administrador, cambiar fecha de visita/datos de taller; cerrar compromiso | Actividad muestra autor, valores anteriores y nuevos | |
 | Duplicados antiguos | Revisar un par cercano sin unificar | Conserva ambos talleres y guarda motivo de revisión | |
 | Unificación | En datos de prueba, elegir ficha a conservar y motivo | Mueve historial y compromisos; archiva origen; conserva autores y fotos | |
 | Conflicto de agenda | Unificar talleres con igual vendedor, fecha y hora programada | Rechaza operación sin cambios parciales | |
@@ -52,3 +51,7 @@ Las pruebas automáticas usan coordenadas controladas. En campo, el GPS puede te
 | | | | | | | | |
 
 Al terminar, conservar el reporte descargado y anotar cualquier pendiente sin sincronizar antes de cerrar sesión o limpiar datos del navegador.
+
+- Vendedor: comprobar que Mis visitas no tiene botones de iniciar, editar ni eliminar, y que Nueva visita no exige resultado comercial.
+- Mensajero: deshabilitar Entregas y confirmar que no se ejecuta rastreo ni confirmación de entregas; Programar y Seguimiento nunca se habilitan para este rol.
+- Permisos: rechazar valores no booleanos y opciones de otro rol. Confirmar que una sesión anterior queda invalidada.

@@ -1,11 +1,12 @@
+const { requirePermission } = require('../services/permissions');
 const express = require('express');
 const entregaController = require('../controllers/entregaController');
 const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 
 const router = express.Router();
-router.use(authenticateToken);
+router.use(authenticateToken, requirePermission('delivery'));
 
-router.post('/position', authorizeRoles('MENSAJERO'), entregaController.registerPosition);
+router.post('/position', authorizeRoles('MENSAJERO'), requirePermission('delivery'), entregaController.registerPosition);
 router.post('/complete', authorizeRoles('MENSAJERO'), entregaController.completeDelivery);
 router.post('/cancel', authorizeRoles('MENSAJERO'), entregaController.cancelDelivery);
 router.get('/status', authorizeRoles('MENSAJERO'), entregaController.getStatus);

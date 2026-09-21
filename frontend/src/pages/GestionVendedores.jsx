@@ -1,9 +1,11 @@
+import UserPermissions from '../components/UserPermissions';
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, CheckCircle, AlertTriangle, Lock, X, Edit, Power } from 'lucide-react';
+import { Users, UserPlus, CheckCircle, AlertTriangle, Lock, X, Edit, Power, ShieldCheck } from 'lucide-react';
 import { api } from '../api/api';
 import SectorMultiSelect from '../components/SectorMultiSelect';
 
 export default function GestionVendedores() {
+  const [permissionUser, setPermissionUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [sectors, setSectors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -189,6 +191,7 @@ export default function GestionVendedores() {
 
   return (
     <div>
+      {permissionUser && <UserPermissions user={permissionUser} onClose={()=>setPermissionUser(null)} onSaved={()=>{setPermissionUser(null);setSuccess('Permisos actualizados. El usuario debe iniciar sesión nuevamente.');fetchUsers();}} />}
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
@@ -294,6 +297,7 @@ export default function GestionVendedores() {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                          {u.role !== 'ADMIN' && <button type="button" className="btn btn-secondary" style={{width:40,height:40,padding:0}} onClick={()=>setPermissionUser(u)} title="Permisos de acceso" aria-label={`Permisos de ${u.name}`}><ShieldCheck size={17} /></button>}
                           <button
                             type="button"
                             onClick={() => handleEditClick(u)}

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { authenticateToken,authorizeRoles } = require('../middlewares/auth');
 const { validateInput,validateId } = require('../middlewares/validateInput');
 const c = require('../controllers/commercialController');
-router.use(authenticateToken,authorizeRoles(['ADMIN','VENDEDOR']),validateInput);
+router.use(authenticateToken,authorizeRoles('ADMIN'),validateInput);
 router.param('id',validateId);
 router.get('/compromisos',c.list);
 router.post('/compromisos',c.create);
